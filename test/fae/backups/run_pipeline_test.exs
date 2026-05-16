@@ -101,6 +101,44 @@ defmodule Fae.Backups.RunPipelineTest do
       assert {:ok, _} = RunPipeline.run(job)
     end
 
+    test "applies destination.path_prefix to object key", %{destination: destination} do
+      {:ok, destination} =
+        Destinations.update(destination, %{path_prefix: "fae/shawn"})
+
+      job = create_job(destination)
+
+      DriverMock
+      |> expect(:put, fn _dest, key, _path ->
+        assert String.starts_with?(key, "fae/shawn/#{job.slug}/")
+        {:ok, %{byte_size: 5, sha256: "x"}}
+      end)
+      |> expect(:list, fn _dest, prefix ->
+        assert prefix == "fae/shawn/#{job.slug}/"
+        {:ok, []}
+      end)
+
+      assert {:ok, _} = RunPipeline.run(job)
+    end
+
+    test "stacks destination.path_prefix with job.prefix", %{destination: destination} do
+      {:ok, destination} =
+        Destinations.update(destination, %{path_prefix: "fae/shawn"})
+
+      job = create_job(destination, %{prefix: "databases"})
+
+      DriverMock
+      |> expect(:put, fn _dest, key, _path ->
+        assert String.starts_with?(key, "fae/shawn/databases/#{job.slug}/")
+        {:ok, %{byte_size: 5, sha256: "x"}}
+      end)
+      |> expect(:list, fn _dest, prefix ->
+        assert prefix == "fae/shawn/databases/#{job.slug}/"
+        {:ok, []}
+      end)
+
+      assert {:ok, _} = RunPipeline.run(job)
+    end
+
     test "uses tar.gz extension when package_format is tar_gz", %{destination: destination} do
       job = create_job(destination, %{package_format: "tar_gz"})
 

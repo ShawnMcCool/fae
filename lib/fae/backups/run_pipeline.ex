@@ -119,11 +119,19 @@ defmodule Fae.Backups.RunPipeline do
 
   @doc false
   def object_prefix(%Job{} = job) do
-    case job.prefix |> to_string() |> String.trim() |> String.trim("/") do
-      "" -> "#{job.slug}/"
-      p -> "#{p}/#{job.slug}/"
-    end
+    [destination_path_prefix(job), trim_segment(job.prefix), job.slug]
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join("/")
+    |> Kernel.<>("/")
   end
+
+  defp destination_path_prefix(%Job{destination: %{path_prefix: prefix}}) when is_binary(prefix),
+    do: trim_segment(prefix)
+
+  defp destination_path_prefix(_job), do: ""
+
+  defp trim_segment(nil), do: ""
+  defp trim_segment(value), do: value |> to_string() |> String.trim() |> String.trim("/")
 
   defp finish(run, {:ok, %{object_key: object_key, byte_size: bytes, sha256: sha} = info}) do
     {:ok, finished} =

@@ -46,4 +46,32 @@ defmodule Fae.Backups.DestinationTest do
       assert "has already been taken" in errors_on(changeset).name
     end
   end
+
+  describe "path_prefix" do
+    test "defaults to empty string" do
+      {:ok, dest} = Destinations.create(@valid_attrs)
+      assert dest.path_prefix == ""
+    end
+
+    test "accepts a value" do
+      {:ok, dest} =
+        Destinations.create(Map.put(@valid_attrs, :path_prefix, "fae/this-machine"))
+
+      assert dest.path_prefix == "fae/this-machine"
+    end
+
+    test "strips leading and trailing slashes" do
+      {:ok, dest} =
+        Destinations.create(Map.put(@valid_attrs, :path_prefix, "/fae/this-machine/"))
+
+      assert dest.path_prefix == "fae/this-machine"
+    end
+
+    test "strips surrounding whitespace" do
+      {:ok, dest} =
+        Destinations.create(Map.put(@valid_attrs, :path_prefix, "  fae/machine  "))
+
+      assert dest.path_prefix == "fae/machine"
+    end
+  end
 end

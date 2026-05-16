@@ -141,6 +141,19 @@ defmodule FaeWeb.BackupsLive.DestinationForm do
           </div>
 
           <div>
+            <label class="label">Bucket-root path prefix (optional)</label>
+            <.input
+              field={@form[:path_prefix]}
+              type="text"
+              placeholder="fae/this-machine"
+              class="input input-bordered w-full font-mono"
+            />
+            <p class="text-xs opacity-60 mt-1">
+              Prepended to every object key for jobs using this destination. Leading and trailing slashes are stripped automatically. Leave blank if every job should write at the bucket root.
+            </p>
+          </div>
+
+          <div>
             <label class="label">Access key ID</label>
             <.input
               field={@form[:access_key_id]}

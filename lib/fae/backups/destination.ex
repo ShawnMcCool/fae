@@ -8,6 +8,13 @@ defmodule Fae.Backups.Destination do
   Object Storage, AWS S3, MinIO, etc.). `force_path_style` should be
   `true` for Hetzner.
 
+  `path_prefix` is an optional bucket-root prefix that applies to every
+  job using this destination — useful when one bucket is shared across
+  multiple Fae installs or users. Leading/trailing slashes are trimmed
+  on cast. The effective object key is
+  `<path_prefix>/<job.prefix>/<job.slug>/<timestamp>.<ext>`; any empty
+  segment is omitted.
+
   Credentials live in the SQLite DB; the DB file is mode 0600 in
   `~/.local/share/fae/` per the application's filesystem layout.
   """
@@ -28,6 +35,7 @@ defmodule Fae.Backups.Destination do
           region: String.t() | nil,
           bucket: String.t() | nil,
           force_path_style: boolean(),
+          path_prefix: String.t(),
           access_key_id: String.t() | nil,
           secret_access_key: String.t() | nil,
           inserted_at: DateTime.t() | nil,
@@ -41,6 +49,7 @@ defmodule Fae.Backups.Destination do
     field :region, :string
     field :bucket, :string
     field :force_path_style, :boolean, default: false
+    field :path_prefix, :string, default: ""
     field :access_key_id, :string
     field :secret_access_key, :string
 
@@ -48,7 +57,7 @@ defmodule Fae.Backups.Destination do
   end
 
   @required ~w(name driver endpoint_url region bucket access_key_id secret_access_key)a
-  @optional ~w(force_path_style)a
+  @optional ~w(force_path_style path_prefix)a
 
   def changeset(destination, attrs) do
     destination
@@ -58,7 +67,19 @@ defmodule Fae.Backups.Destination do
     |> validate_format(:endpoint_url, ~r{^https?://},
       message: "must start with http:// or https://"
     )
+    |> normalize_path_prefix()
     |> unique_constraint(:name)
+  end
+
+  defp normalize_path_prefix(changeset) do
+    case get_change(changeset, :path_prefix) do
+      nil ->
+        changeset
+
+      value ->
+        normalized = value |> to_string() |> String.trim() |> String.trim("/")
+        put_change(changeset, :path_prefix, normalized)
+    end
   end
 
   @doc "Allowed driver atoms-as-strings."
