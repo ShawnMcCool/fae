@@ -1,5 +1,10 @@
 import Config
 
+# Disable auto-tick on the application-level SystemStatus during tests.
+# Tests that need ticks instantiate their own SystemStatus with an explicit
+# `tick_interval_ms` (or call `tick/1` manually).
+config :fae, Fae.SystemStatus, tick_interval_ms: :infinity
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used

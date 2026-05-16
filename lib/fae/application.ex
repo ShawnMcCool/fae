@@ -10,19 +10,23 @@ defmodule Fae.Application do
     children = [
       FaeWeb.Telemetry,
       Fae.Repo,
-      {Ecto.Migrator,
-       repos: Application.fetch_env!(:fae, :ecto_repos), skip: skip_migrations?()},
+      {Ecto.Migrator, repos: Application.fetch_env!(:fae, :ecto_repos), skip: skip_migrations?()},
       {DNSCluster, query: Application.get_env(:fae, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Fae.PubSub},
-      # Start a worker by calling: Fae.Worker.start_link(arg)
-      # {Fae.Worker, arg},
-      # Start to serve requests, typically the last entry
+      Fae.SystemStatus,
       FaeWeb.Endpoint
     ]
 
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: Fae.Supervisor]
+    # max_restarts/max_seconds set explicitly per OTP discipline; defaults work
+    # but explicit values document the chosen tolerance and prevent drift if
+    # Erlang defaults ever change.
+    opts = [
+      strategy: :one_for_one,
+      name: Fae.Supervisor,
+      max_restarts: 3,
+      max_seconds: 5
+    ]
+
     Supervisor.start_link(children, opts)
   end
 
