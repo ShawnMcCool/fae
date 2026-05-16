@@ -18,7 +18,7 @@ defmodule Fae.SelfUpdate do
   defeats these checks — release signing is a follow-up.
   """
 
-  alias Fae.SelfUpdate.{CheckerJob, Storage, UpdateChecker}
+  alias Fae.SelfUpdate.{CheckerJob, Service, Storage, UpdateChecker, Updater}
   alias Fae.Topics
 
   @boot_check_delay_seconds 30
@@ -71,6 +71,57 @@ defmodule Fae.SelfUpdate do
   @spec record_check_result({:ok, map()} | {:error, term()}) ::
           {:ok, UpdateChecker.classification(), map()} | {:error, term()}
   def record_check_result(outcome), do: Storage.record_check_result(outcome)
+
+  @doc """
+  Subscribes the caller to `self_update:progress` — apply-time phase
+  transitions (`{:progress, phase, percent}`) and outcomes
+  (`{:apply_failed, reason}`, `{:apply_cancelled}`) fire here.
+  """
+  @spec subscribe_progress() :: :ok | {:error, term()}
+  def subscribe_progress do
+    Phoenix.PubSub.subscribe(Fae.PubSub, Topics.self_update_progress())
+  end
+
+  @doc """
+  Applies the cached pending release via the `Updater` GenServer.
+
+  Returns `:ok` if the apply pipeline has started, or
+  `{:error, :no_update_pending | :invalid_tag | :already_running}`.
+  """
+  @spec apply_pending() ::
+          :ok | {:error, :no_update_pending | :invalid_tag | :already_running}
+  def apply_pending, do: Updater.apply_pending()
+
+  @doc "Cancels an in-flight apply if it hasn't passed the handoff point."
+  @spec cancel_apply() :: :ok | {:error, :not_running | :past_point_of_no_return}
+  def cancel_apply, do: Updater.cancel()
+
+  @doc "Returns the current `Updater` state."
+  @spec current_status() :: Updater.status()
+  def current_status, do: Updater.status()
+
+  @doc "Returns the systemd state for the fae unit. See `Service.state/1`."
+  @spec service_state() :: Service.state()
+  def service_state, do: Service.state()
+
+  @doc """
+  Returns the systemd unit this BEAM is supervised by, or `nil`.
+  Cheap (no `systemctl` shell-out).
+  """
+  @spec detected_unit() :: String.t() | nil
+  def detected_unit, do: Service.detected_unit()
+
+  @doc "Queues a systemd-managed restart of the running unit."
+  @spec service_restart() :: :ok | {:error, term()}
+  def service_restart, do: Service.restart()
+
+  @doc "Queues a systemd-managed stop of the running unit."
+  @spec service_stop() :: :ok | {:error, term()}
+  def service_stop, do: Service.stop()
+
+  @doc "Fetches the textual output of `systemctl --user status` for the unit."
+  @spec service_status_output() :: {:ok, String.t()} | {:error, term()}
+  def service_status_output, do: Service.status_output()
 
   @doc """
   App-boot hydration. Reads the persisted `latest_known` entry into
