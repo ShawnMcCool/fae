@@ -62,6 +62,14 @@ defmodule Fae.Settings do
     result
   end
 
+  @spec put!(String.t(), map()) :: Entry.t()
+  def put!(key, value) do
+    case put(key, value) do
+      {:ok, entry} -> entry
+      {:error, changeset} -> raise "Fae.Settings.put!/2 failed: #{inspect(changeset.errors)}"
+    end
+  end
+
   @spec delete(String.t()) :: :ok
   def delete(key) when is_binary(key) do
     case Repo.get_by(Entry, key: key) do

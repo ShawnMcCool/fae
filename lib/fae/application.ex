@@ -28,8 +28,23 @@ defmodule Fae.Application do
       max_seconds: 5
     ]
 
-    Supervisor.start_link(children, opts)
+    children
+    |> Supervisor.start_link(opts)
+    |> post_supervisor_hooks()
   end
+
+  # Runs post-start hooks when the supervision tree came up successfully.
+  # Skipping the hooks on a failed start prevents misleading secondary
+  # errors from masking the original cause of the failure.
+  defp post_supervisor_hooks({:ok, _pid} = result) do
+    if Fae.SelfUpdate.enabled?() do
+      Fae.SelfUpdate.boot!()
+    end
+
+    result
+  end
+
+  defp post_supervisor_hooks({:error, _reason} = error), do: error
 
   # Tell Phoenix to update the endpoint configuration
   # whenever the application is updated.

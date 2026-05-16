@@ -11,14 +11,27 @@ config :fae,
   ecto_repos: [Fae.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+# Captures the build-time env so runtime code can branch on it without
+# leaking Mix into runtime. `Fae.SelfUpdate.enabled?/0` reads this.
+config :fae, :environment, config_env()
+
 # Oban with the SQLite-native Lite engine. The self_update queue is
 # concurrency 1 — only one update can be in flight at a time (it writes
-# to the install dir on disk). Cron entries are added in the modules
-# that own them (e.g., self-update's CheckerJob), not here.
+# to the install dir on disk).
+#
+# Cron schedule: minute :17 every six hours. The off-the-hour minute
+# spreads installs across the 60s window so we stay comfortably under
+# GitHub's 60/h unauthenticated rate limit.
 config :fae, Oban,
   engine: Oban.Engines.Lite,
   repo: Fae.Repo,
-  queues: [self_update: 1]
+  queues: [self_update: 1],
+  plugins: [
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"17 */6 * * *", Fae.SelfUpdate.CheckerJob}
+     ]}
+  ]
 
 # Configure the endpoint
 config :fae, FaeWeb.Endpoint,
