@@ -15,6 +15,10 @@ config :fae, Oban, testing: :inline
 # test's sandbox.
 config :fae, Fae.Backups.Scheduler, enabled: false
 
+# Same for the Notifier — disabled by default in test; specific tests
+# start one manually with a stub notify_runner.
+config :fae, Fae.Backups.Notifier, enabled: false
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used
