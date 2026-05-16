@@ -46,7 +46,7 @@ defmodule FaeWeb.BackupsLive.DestinationForm do
   end
 
   defp save_new(socket, attrs) do
-    case Destinations.create(attrs) do
+    case Destinations.create_with_verification(attrs) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -54,12 +54,15 @@ defmodule FaeWeb.BackupsLive.DestinationForm do
          |> push_navigate(to: ~p"/backups/destinations")}
 
       {:error, changeset} ->
-        {:noreply, assign(socket, :form, to_form(changeset))}
+        {:noreply,
+         socket
+         |> put_flash(:error, "Could not verify destination. Check the highlighted fields.")
+         |> assign(:form, to_form(changeset))}
     end
   end
 
   defp save_edit(socket, attrs) do
-    case Destinations.update(socket.assigns.destination, attrs) do
+    case Destinations.update_with_verification(socket.assigns.destination, attrs) do
       {:ok, _} ->
         {:noreply,
          socket
@@ -67,7 +70,10 @@ defmodule FaeWeb.BackupsLive.DestinationForm do
          |> push_navigate(to: ~p"/backups/destinations")}
 
       {:error, changeset} ->
-        {:noreply, assign(socket, :form, to_form(changeset))}
+        {:noreply,
+         socket
+         |> put_flash(:error, "Could not verify destination. Check the highlighted fields.")
+         |> assign(:form, to_form(changeset))}
     end
   end
 
@@ -173,7 +179,9 @@ defmodule FaeWeb.BackupsLive.DestinationForm do
 
           <div class="flex justify-end gap-2 pt-2">
             <.link navigate={~p"/backups/destinations"} class="btn btn-ghost">Cancel</.link>
-            <button type="submit" class="btn btn-primary">Save</button>
+            <button type="submit" class="btn btn-primary" phx-disable-with="Verifying…">
+              Save
+            </button>
           </div>
         </.form>
       </section>

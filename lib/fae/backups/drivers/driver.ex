@@ -21,4 +21,27 @@ defmodule Fae.Backups.Drivers.Driver do
 
   @callback delete(Destination.t(), key :: String.t()) ::
               :ok | {:error, term()}
+
+  @doc """
+  Cheapest possible reachability + auth + region check, used by the
+  destination form's "save = verify first" path. Implementations
+  should distinguish the common failure modes so the UI can attach
+  the error to the right field:
+
+    * `:unauthorized` / `:forbidden` — bad credentials
+    * `:no_bucket` — endpoint reached but the bucket doesn't exist
+    * `{:wrong_region, hint_or_nil}` — endpoint hit, bucket lives
+      elsewhere (S3 returns the correct region as a hint)
+    * `{:network, reason}` — DNS, TLS, connection refused, etc.
+    * `{:s3_error, status, body}` — anything else
+  """
+  @callback verify(Destination.t()) ::
+              :ok
+              | {:error,
+                 :unauthorized
+                 | :forbidden
+                 | :no_bucket
+                 | {:wrong_region, String.t() | nil}
+                 | {:network, term()}
+                 | {:s3_error, pos_integer(), term()}}
 end

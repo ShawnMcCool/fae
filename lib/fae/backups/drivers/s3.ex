@@ -46,6 +46,54 @@ defmodule Fae.Backups.Drivers.S3 do
   end
 
   @impl true
+  def verify(%Destination{} = dest) do
+    url = bucket_url(dest)
+    headers = base_headers(url)
+    signed = sign(dest, "HEAD", url, headers, "")
+
+    case Req.head(url, headers: signed) do
+      {:ok, %Req.Response{status: status}} when status in 200..299 ->
+        :ok
+
+      {:ok, %Req.Response{status: 301, headers: resp_headers}} ->
+        {:error, {:wrong_region, header(resp_headers, "x-amz-bucket-region")}}
+
+      {:ok, %Req.Response{status: 401}} ->
+        {:error, :unauthorized}
+
+      {:ok, %Req.Response{status: 403}} ->
+        {:error, :forbidden}
+
+      {:ok, %Req.Response{status: 404}} ->
+        {:error, :no_bucket}
+
+      {:ok, %Req.Response{status: status, body: response_body}} ->
+        {:error, {:s3_error, status, response_body}}
+
+      {:error, %{reason: reason}} ->
+        {:error, {:network, reason}}
+
+      {:error, reason} ->
+        {:error, {:network, reason}}
+    end
+  end
+
+  defp header(headers, name) when is_map(headers) do
+    case Map.get(headers, name) do
+      [value | _] -> value
+      value when is_binary(value) -> value
+      _ -> nil
+    end
+  end
+
+  defp header(headers, name) when is_list(headers) do
+    case List.keyfind(headers, name, 0) do
+      {_, value} -> value
+      _ -> nil
+    end
+  end
+
+  @impl true
   def delete(%Destination{} = dest, key) do
     url = object_url(dest, key)
     headers = base_headers(url)

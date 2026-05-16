@@ -2,9 +2,14 @@ defmodule FaeWeb.BackupsLiveTest do
   use FaeWeb.ConnCase, async: false
   use Oban.Testing, repo: Fae.Repo
 
+  import Mox
   import Phoenix.LiveViewTest
 
   alias Fae.Backups.{Destinations, Jobs}
+  alias Fae.Backups.Drivers.DriverMock
+
+  setup :verify_on_exit!
+  setup :set_mox_global
 
   defp create_destination! do
     {:ok, dest} =
@@ -147,27 +152,62 @@ defmodule FaeWeb.BackupsLiveTest do
   end
 
   describe "DestinationForm new" do
-    test "creates a destination", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/backups/destinations/new")
+    setup do
+      Application.put_env(:fae, :backups_drivers, %{"s3" => DriverMock})
+      on_exit(fn -> Application.delete_env(:fae, :backups_drivers) end)
+      :ok
+    end
 
-      view
-      |> form("form",
-        destination: %{
-          "name" => "Hetzner Prod",
-          "driver" => "s3",
-          "endpoint_url" => "https://fsn1.your-objectstorage.com",
-          "region" => "fsn1",
-          "bucket" => "fae-backups",
-          "force_path_style" => "true",
-          "access_key_id" => "AK",
-          "secret_access_key" => "SK"
-        }
-      )
-      |> render_submit()
+    @form_attrs %{
+      "name" => "Hetzner Prod",
+      "driver" => "s3",
+      "endpoint_url" => "https://fsn1.your-objectstorage.com",
+      "region" => "fsn1",
+      "bucket" => "fae-backups",
+      "force_path_style" => "true",
+      "access_key_id" => "AK",
+      "secret_access_key" => "SK"
+    }
+
+    test "creates a destination when the driver verifies successfully", %{conn: conn} do
+      expect(DriverMock, :verify, fn _dest -> :ok end)
+
+      {:ok, view, _html} = live(conn, ~p"/backups/destinations/new")
+      view |> form("form", destination: @form_attrs) |> render_submit()
 
       [dest | _] = Destinations.list()
       assert dest.name == "Hetzner Prod"
       assert dest.force_path_style
+    end
+
+    test "refuses to create when verification fails (forbidden)", %{conn: conn} do
+      expect(DriverMock, :verify, fn _dest -> {:error, :forbidden} end)
+
+      {:ok, view, _html} = live(conn, ~p"/backups/destinations/new")
+      html = view |> form("form", destination: @form_attrs) |> render_submit()
+
+      assert Destinations.list() == []
+      assert html =~ "credentials lack permission"
+    end
+
+    test "refuses to create when bucket is missing (404)", %{conn: conn} do
+      expect(DriverMock, :verify, fn _dest -> {:error, :no_bucket} end)
+
+      {:ok, view, _html} = live(conn, ~p"/backups/destinations/new")
+      html = view |> form("form", destination: @form_attrs) |> render_submit()
+
+      assert Destinations.list() == []
+      assert html =~ "no bucket with this name"
+    end
+
+    test "refuses to create on network failure", %{conn: conn} do
+      expect(DriverMock, :verify, fn _dest -> {:error, {:network, :nxdomain}} end)
+
+      {:ok, view, _html} = live(conn, ~p"/backups/destinations/new")
+      html = view |> form("form", destination: @form_attrs) |> render_submit()
+
+      assert Destinations.list() == []
+      assert html =~ "could not reach the endpoint"
     end
   end
 end
