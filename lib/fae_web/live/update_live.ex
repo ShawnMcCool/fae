@@ -20,6 +20,7 @@ defmodule FaeWeb.UpdateLive do
 
     {:ok,
      socket
+     |> assign(:page_title, "Updates")
      |> assign(:current_version, Fae.Version.current_version())
      |> assign(:enabled?, SelfUpdate.enabled?())
      |> assign(:service_state, SelfUpdate.service_state())

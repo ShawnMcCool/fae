@@ -72,4 +72,36 @@ defmodule FaeWeb.SidebarTest do
       assert html =~ ~s|data-tip="Updates"|
     end
   end
+
+  describe "navbar (Phoenix-default chrome removed)" do
+    test "shows the Fae brand and version, not Phoenix's", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/")
+
+      assert html =~ "Fae"
+      assert html =~ "v#{Fae.Version.current_version()}"
+
+      # Phoenix-default chrome must be gone.
+      refute html =~ "phoenixframework.org"
+      refute html =~ "Get Started"
+      refute html =~ "hexdocs.pm/phoenix/overview"
+    end
+
+    test "page titles flow through per LiveView", %{conn: conn} do
+      # HEEx renders <title> with whitespace around the interpolation,
+      # so match the title block with a permissive regex rather than an
+      # exact substring.
+      title_re = fn label ->
+        ~r{<title[^>]*>\s*#{Regex.escape(label)}\s*·\s*Fae\s*</title>}
+      end
+
+      {:ok, _, html_root} = live(conn, ~p"/")
+      assert html_root =~ title_re.("Dashboard")
+
+      {:ok, _, html_backups} = live(conn, ~p"/backups")
+      assert html_backups =~ title_re.("Backup jobs")
+
+      {:ok, _, html_destinations} = live(conn, ~p"/backups/destinations")
+      assert html_destinations =~ title_re.("Destinations")
+    end
+  end
 end

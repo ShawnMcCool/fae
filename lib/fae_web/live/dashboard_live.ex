@@ -17,7 +17,10 @@ defmodule FaeWeb.DashboardLive do
       :ok = SystemStatus.subscribe()
     end
 
-    {:ok, assign(socket, status: SystemStatus.get_state())}
+    {:ok,
+     socket
+     |> assign(:page_title, "Dashboard")
+     |> assign(:status, SystemStatus.get_state())}
   end
 
   @impl true
@@ -39,20 +42,6 @@ defmodule FaeWeb.DashboardLive do
           <dt class="text-sm opacity-75">Uptime (seconds)</dt>
           <dd id="uptime-seconds" class="font-mono">{@status.uptime_seconds}</dd>
         </dl>
-      </section>
-
-      <section id="quick-links" class="card bg-base-200 p-6">
-        <h2 class="text-xl font-semibold mb-4">Tools</h2>
-        <ul class="space-y-2">
-          <li>
-            <.link navigate={~p"/update"} class="link link-primary">Updates</.link>
-            <span class="text-sm opacity-75 ml-2">check for and apply new releases</span>
-          </li>
-          <li>
-            <.link navigate={~p"/backups"} class="link link-primary">Backups</.link>
-            <span class="text-sm opacity-75 ml-2">scheduled file / folder / SQLite backups</span>
-          </li>
-        </ul>
       </section>
     </Layouts.app>
     """

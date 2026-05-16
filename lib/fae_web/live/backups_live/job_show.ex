@@ -16,9 +16,12 @@ defmodule FaeWeb.BackupsLive.JobShow do
       :ok = Backups.subscribe_runs()
     end
 
+    job = Jobs.get!(id)
+
     {:ok,
      socket
-     |> assign(:job, Jobs.get!(id))
+     |> assign(:page_title, job.name)
+     |> assign(:job, job)
      |> assign(:runs, Runs.list_recent(id, 50))}
   end
 

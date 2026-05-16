@@ -9,7 +9,10 @@ defmodule FaeWeb.BackupsLive.DestinationsIndex do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, destinations: Destinations.list())}
+    {:ok,
+     socket
+     |> assign(:page_title, "Destinations")
+     |> assign(:destinations, Destinations.list())}
   end
 
   @impl true

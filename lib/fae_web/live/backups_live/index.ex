@@ -17,7 +17,10 @@ defmodule FaeWeb.BackupsLive.Index do
       :ok = Backups.subscribe_runs()
     end
 
-    {:ok, load_rows(socket)}
+    {:ok,
+     socket
+     |> assign(:page_title, "Backup jobs")
+     |> load_rows()}
   end
 
   @impl true
