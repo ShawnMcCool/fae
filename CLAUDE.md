@@ -41,7 +41,12 @@ journalctl --user -u fae -f
 
 Then open <http://127.0.0.1:4321>.
 
-The systemd unit lives at `contrib/systemd/fae.service`. The release tree includes a `bin/server` wrapper (from `rel/overlays/bin/server`) that sets `PHX_SERVER=true` and starts the release. The first boot in production auto-generates and persists a `secret_key_base` at `~/.local/share/fae/secret_key_base` (mode 0600).
+The systemd unit lives at `rel/overlays/share/systemd/fae.service` and is bundled into the release tree at `share/systemd/fae.service`. The release tree also includes:
+
+- `bin/server` (from `rel/overlays/bin/server`) — wrapper that sets `PHX_SERVER=true` and starts the release.
+- `bin/fae-install` (from `rel/overlays/bin/fae-install`) — installer script executed by `Fae.SelfUpdate.Handoff` after the in-app updater stages a new release. Stops the running unit, swaps the install dir, refreshes the systemd unit, and starts the new release. Also usable directly (`bin/fae-install`) from a staged tree for manual installs.
+
+The first boot in production auto-generates and persists a `secret_key_base` at `~/.local/share/fae/secret_key_base` (mode 0600).
 
 ## Filesystem layout (XDG)
 

@@ -23,7 +23,7 @@ cp -r "$RELEASE_SRC" "$INSTALL_DIR"
 
 echo "==> Installing systemd unit to $SYSTEMD_DIR/$SERVICE_NAME"
 mkdir -p "$SYSTEMD_DIR"
-cp contrib/systemd/fae.service "$SYSTEMD_DIR/$SERVICE_NAME"
+cp "$INSTALL_DIR/share/systemd/$SERVICE_NAME" "$SYSTEMD_DIR/$SERVICE_NAME"
 
 echo "==> Enabling linger (so the service runs without an active login)"
 loginctl enable-linger "$USER" || true

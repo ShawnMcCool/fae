@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# fae-install — applies a staged release to ~/.local/opt/fae and
+# (re)installs the systemd user unit.
+#
+# Invoked by Fae.SelfUpdate.Handoff in a detached session AFTER the
+# running release has been downloaded, checksum-verified, and extracted
+# into this script's containing release tree. The script:
+#
+#   1. Stops the running fae.service (synchronous, so files are closed)
+#   2. Moves the existing install aside to fae.old (atomic, rollback hook)
+#   3. Copies the new release into ~/.local/opt/fae
+#   4. (Re)installs the systemd unit from this release
+#   5. Starts fae.service back up
+#   6. Removes fae.old on success
+#
+# Ecto migrations run automatically on app boot (Ecto.Migrator in the
+# supervision tree fires when RELEASE_NAME is set), so there is no
+# explicit migrate step here.
+
+set -euo pipefail
+
+STAGED_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+INSTALL_DIR="${HOME}/.local/opt/fae"
+SYSTEMD_DIR="${HOME}/.config/systemd/user"
+SYSTEMD_UNIT="fae.service"
+
+log() { printf 'fae-install: %s\n' "$*"; }
+
+log "staged at ${STAGED_ROOT}"
+log "installing to ${INSTALL_DIR}"
+
+if [[ ! -d "${STAGED_ROOT}/bin" ]]; then
+  log "ERROR: staged tree is missing bin/, refusing to install"
+  exit 1
+fi
+
+# Stop the running service synchronously. Without --no-block here,
+# systemctl stop returns only once the unit is actually down — which
+# is what we need before swapping files. Tolerate failure (service may
+# already be stopped, or the unit may not exist on first install).
+log "stopping ${SYSTEMD_UNIT}"
+systemctl --user stop "${SYSTEMD_UNIT}" || true
+
+# Move-aside-then-copy is two filesystem operations on the same volume;
+# both are atomic individually. If the cp fails we still have fae.old
+# to recover from.
+mkdir -p "$(dirname "${INSTALL_DIR}")"
+rm -rf "${INSTALL_DIR}.old"
+if [[ -d "${INSTALL_DIR}" ]]; then
+  log "moving existing install to ${INSTALL_DIR}.old"
+  mv "${INSTALL_DIR}" "${INSTALL_DIR}.old"
+fi
+
+log "copying staged release to ${INSTALL_DIR}"
+cp -r "${STAGED_ROOT}" "${INSTALL_DIR}"
+
+# Refresh the systemd unit in case this release shipped a new version
+# of fae.service (added env vars, hardening, etc).
+log "installing systemd unit"
+mkdir -p "${SYSTEMD_DIR}"
+cp "${INSTALL_DIR}/share/systemd/${SYSTEMD_UNIT}" "${SYSTEMD_DIR}/${SYSTEMD_UNIT}"
+systemctl --user daemon-reload
+
+# enable handles both first-install (no prior enabling) and existing
+# (idempotent). --now starts the service.
+log "enabling and starting ${SYSTEMD_UNIT}"
+systemctl --user enable --now "${SYSTEMD_UNIT}"
+
+log "removing ${INSTALL_DIR}.old"
+rm -rf "${INSTALL_DIR}.old"
+
+log "done"
