@@ -19,6 +19,16 @@ defmodule FaeWeb.Router do
 
     live "/", DashboardLive
     live "/update", UpdateLive
+
+    scope "/backups" do
+      live "/", BackupsLive.Index, :index
+      live "/new", BackupsLive.JobForm, :new
+      live "/destinations", BackupsLive.DestinationsIndex, :index
+      live "/destinations/new", BackupsLive.DestinationForm, :new
+      live "/destinations/:id/edit", BackupsLive.DestinationForm, :edit
+      live "/:id", BackupsLive.JobShow, :show
+      live "/:id/edit", BackupsLive.JobForm, :edit
+    end
   end
 
   # Other scopes may use custom stacks.

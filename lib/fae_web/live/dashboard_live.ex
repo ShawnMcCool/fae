@@ -48,6 +48,10 @@ defmodule FaeWeb.DashboardLive do
             <.link navigate={~p"/update"} class="link link-primary">Updates</.link>
             <span class="text-sm opacity-75 ml-2">check for and apply new releases</span>
           </li>
+          <li>
+            <.link navigate={~p"/backups"} class="link link-primary">Backups</.link>
+            <span class="text-sm opacity-75 ml-2">scheduled file / folder / SQLite backups</span>
+          </li>
         </ul>
       </section>
     </Layouts.app>
