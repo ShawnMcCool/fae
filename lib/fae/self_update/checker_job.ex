@@ -34,12 +34,22 @@ defmodule Fae.SelfUpdate.CheckerJob do
   end
 
   @doc """
-  Enqueues an immediate check, bypassing the 1-hour unique window so a
-  manual "Check now" always wins.
+  Enqueues an immediate check. Uses `unique: false` to bypass the
+  worker-level uniqueness constraint entirely — a manual "Check now"
+  is an explicit user action that always runs, even if a prior check
+  completed minutes ago and would otherwise hit the dedup window.
+
+  The original implementation used `replace: [scheduled: [...]]`, but
+  that only matches conflicts against `:scheduled` jobs. In practice
+  the most common conflict is against a `:completed` boot-time check,
+  and the replace clause didn't cover that — manual checks silently
+  no-op'd (returned the completed job with conflict?: true). The queue
+  concurrency is 1, so back-to-back inserts serialize anyway; no need
+  for application-level dedup on the manual path.
   """
   @spec enqueue_now() :: {:ok, Oban.Job.t()} | {:error, term()}
   def enqueue_now do
-    Oban.insert(new(%{}, replace: [scheduled: [:scheduled_at, :args]]))
+    Oban.insert(new(%{}, unique: false))
   end
 
   @doc """

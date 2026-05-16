@@ -8,6 +8,15 @@ ExecStart=%h/.local/opt/fae/bin/server
 Restart=on-failure
 RestartSec=5
 
+# KillMode=process: when stopping the unit, send SIGTERM only to the main
+# BEAM, not to every process in the unit's cgroup. The self-update flow
+# spawns a detached installer (Fae.SelfUpdate.Handoff) which then calls
+# `systemctl stop fae` on the unit it's about to replace. With the default
+# control-group kill mode, that systemctl call kills the installer too —
+# the BEAM dies, but so does the installer, and the unit never comes back.
+# KillMode=process lets the installer survive its parent's stop.
+KillMode=process
+
 # PHX_SERVER=true is what tells runtime.exs to enable the HTTP listener.
 # Without it, the release boots but never opens its port.
 Environment=PHX_SERVER=true

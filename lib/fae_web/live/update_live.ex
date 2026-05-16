@@ -230,7 +230,10 @@ defmodule FaeWeb.UpdateLive do
         <%= if @latest_release && @latest_release.body != "" do %>
           <details id="release-notes" class="card bg-base-200 p-4">
             <summary class="font-medium">Release notes</summary>
-            <pre class="text-sm whitespace-pre-wrap mt-2" phx-no-curly-interpolation>{@latest_release.body}</pre>
+            <pre
+              class="text-sm whitespace-pre-wrap mt-2"
+              phx-no-curly-interpolation
+            ><%= @latest_release.body %></pre>
           </details>
         <% end %>
       </section>
