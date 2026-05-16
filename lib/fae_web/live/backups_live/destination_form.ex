@@ -74,7 +74,7 @@ defmodule FaeWeb.BackupsLive.DestinationForm do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_path={@current_path}>
       <section class="card bg-base-200 p-6 space-y-4 max-w-2xl">
         <h2 class="text-xl font-semibold">{@page_title}</h2>
 

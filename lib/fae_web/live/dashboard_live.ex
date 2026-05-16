@@ -28,7 +28,7 @@ defmodule FaeWeb.DashboardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_path={@current_path}>
       <section id="system-status" class="card bg-base-200 p-6">
         <h2 class="text-xl font-semibold mb-4">System status</h2>
         <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 items-baseline">

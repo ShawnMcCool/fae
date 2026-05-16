@@ -41,7 +41,7 @@ defmodule FaeWeb.BackupsLive.JobShow do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_path={@current_path}>
       <section class="card bg-base-200 p-6 space-y-4">
         <div class="flex items-center justify-between gap-4">
           <div>
