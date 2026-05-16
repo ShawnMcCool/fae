@@ -25,13 +25,22 @@ config :fae, :environment, config_env()
 config :fae, Oban,
   engine: Oban.Engines.Lite,
   repo: Fae.Repo,
-  queues: [self_update: 1],
+  queues: [self_update: 1, backups: 1],
   plugins: [
     {Oban.Plugins.Cron,
      crontab: [
        {"17 */6 * * *", Fae.SelfUpdate.CheckerJob}
      ]}
   ]
+
+# Tzdata-backed time zone database so DateTime calculations across DST
+# boundaries are correct. Backup schedules resolve in a configured local
+# zone via this database.
+config :elixir, :time_zone_database, Tzdata.TimeZoneDatabase
+
+# Default local zone used to resolve backup schedules. Override per env
+# in runtime.exs if needed.
+config :fae, :timezone, "Etc/UTC"
 
 # Configure the endpoint
 config :fae, FaeWeb.Endpoint,

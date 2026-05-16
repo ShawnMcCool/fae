@@ -17,6 +17,7 @@ defmodule Fae.Application do
       {Phoenix.PubSub, name: Fae.PubSub},
       Fae.SystemStatus,
       Fae.SelfUpdate.Updater,
+      Fae.Backups.Supervisor,
       FaeWeb.Endpoint
     ]
 

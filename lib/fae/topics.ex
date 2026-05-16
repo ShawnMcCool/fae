@@ -7,4 +7,6 @@ defmodule Fae.Topics do
   def settings_updates, do: "settings"
   def self_update_status, do: "self_update:status"
   def self_update_progress, do: "self_update:progress"
+  def backups_runs, do: "backups:runs"
+  def backups_jobs, do: "backups:jobs"
 end
