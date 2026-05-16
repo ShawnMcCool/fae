@@ -1,0 +1,176 @@
+defmodule Fae.Backups.RunPipeline do
+  @moduledoc """
+  Orchestrates one execution of a backup job:
+
+      start run row → snapshot source → package → upload → record
+      success → retention sweep → cleanup
+
+  Failures at any step transition the run row to `"failed"` with the
+  error captured in `error_message`. Cleanups always run (in
+  `try/after`) regardless of success or failure. Retention sweep is
+  best-effort — failures are logged but do not flip a successful run
+  to failed.
+
+  PubSub broadcasts on `Fae.Topics.backups_runs/0`:
+
+    * `{:run_started, run_id}`
+    * `{:run_finished, run_id, :success | :failed, info_or_reason}`
+  """
+
+  require Logger
+
+  alias Fae.Backups.{Drivers, Job, Jobs, Packager, Retention, Runs, Sources}
+  alias Fae.Topics
+
+  @doc """
+  Runs the job and returns `{:ok, run}` or `{:error, reason}`. The
+  caller (Oban worker / "Run now" button) typically discards the
+  return value and inspects the LiveView.
+  """
+  @spec run(Job.t()) :: {:ok, Fae.Backups.Run.t()} | {:error, term()}
+  def run(%Job{} = job) do
+    job = ensure_destination_loaded(job)
+    started_at = Fae.Clock.now()
+    {:ok, run} = Runs.start(job.id, started_at)
+    broadcast({:run_started, run.id})
+
+    result = pipeline(job, run)
+    finish(run, result)
+  end
+
+  defp pipeline(job, run) do
+    with {:ok, src_kind, src_path, src_cleanup} <- Sources.snapshot(job) do
+      try do
+        with_packaged(job, src_kind, src_path, fn upload_path, ext ->
+          upload_and_record(job, run, upload_path, ext)
+        end)
+      after
+        safely(src_cleanup)
+      end
+    end
+  end
+
+  defp with_packaged(job, src_kind, src_path, continuation) do
+    case Packager.package(src_kind, src_path, job.package_format) do
+      {:ok, upload_path, ext, pkg_cleanup} ->
+        try do
+          continuation.(upload_path, ext)
+        after
+          safely(pkg_cleanup)
+        end
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp upload_and_record(job, run, upload_path, ext) do
+    driver = Drivers.driver_for(job.destination)
+    object_key = build_object_key(job, run, ext)
+
+    case driver.put(job.destination, object_key, upload_path) do
+      {:ok, %{byte_size: bytes, sha256: sha}} ->
+        apply_retention(job, driver)
+        {:ok, %{object_key: object_key, byte_size: bytes, sha256: sha}}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp apply_retention(job, driver) do
+    prefix = object_prefix(job)
+
+    with {:ok, objects} <- driver.list(job.destination, prefix) do
+      {_keep, to_delete} =
+        Retention.partition(
+          objects,
+          job.retention_strategy,
+          job.retention_params,
+          Fae.Clock.now()
+        )
+
+      Enum.each(to_delete, fn obj ->
+        case driver.delete(job.destination, obj.key) do
+          :ok ->
+            :ok
+
+          {:error, reason} ->
+            Logger.warning("Retention delete failed for #{obj.key}: #{inspect(reason)}")
+        end
+      end)
+
+      :ok
+    else
+      {:error, reason} ->
+        Logger.warning("Retention list failed: #{inspect(reason)}")
+        :ok
+    end
+  end
+
+  defp build_object_key(job, run, ext) do
+    ts =
+      run.started_at
+      |> DateTime.truncate(:second)
+      |> DateTime.to_iso8601(:basic)
+
+    "#{object_prefix(job)}#{ts}.#{ext}"
+  end
+
+  @doc false
+  def object_prefix(%Job{} = job) do
+    case job.prefix |> to_string() |> String.trim() |> String.trim("/") do
+      "" -> "#{job.slug}/"
+      p -> "#{p}/#{job.slug}/"
+    end
+  end
+
+  defp finish(run, {:ok, %{object_key: object_key, byte_size: bytes, sha256: sha} = info}) do
+    {:ok, finished} =
+      Runs.finish(run, %{
+        finished_at: Fae.Clock.now(),
+        status: "success",
+        object_key: object_key,
+        byte_size: bytes,
+        sha256: sha
+      })
+
+    broadcast({:run_finished, finished.id, :success, info})
+    {:ok, finished}
+  end
+
+  defp finish(run, {:error, reason}) do
+    {:ok, finished} =
+      Runs.finish(run, %{
+        finished_at: Fae.Clock.now(),
+        status: "failed",
+        error_message: format_error(reason)
+      })
+
+    broadcast({:run_finished, finished.id, :failed, reason})
+    {:error, reason}
+  end
+
+  defp format_error(reason) do
+    inspect(reason, pretty: true, limit: :infinity, printable_limit: 4096)
+    |> String.slice(0, 4096)
+  end
+
+  defp ensure_destination_loaded(%Job{destination: %Ecto.Association.NotLoaded{}} = job) do
+    Jobs.get!(job.id)
+  end
+
+  defp ensure_destination_loaded(%Job{} = job), do: job
+
+  defp safely(fun) do
+    fun.()
+  rescue
+    e ->
+      Logger.warning("Backup cleanup failed: #{inspect(e)}")
+      :ok
+  end
+
+  defp broadcast(message) do
+    Phoenix.PubSub.broadcast(Fae.PubSub, Topics.backups_runs(), message)
+  end
+end
