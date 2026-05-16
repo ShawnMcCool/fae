@@ -5,6 +5,10 @@ import Config
 # `tick_interval_ms` (or call `tick/1` manually).
 config :fae, Fae.SystemStatus, tick_interval_ms: :infinity
 
+# Oban runs jobs synchronously in tests so suites don't depend on the
+# job queue's worker pool or cron schedule firing at real wall-clock time.
+config :fae, Oban, testing: :inline
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used

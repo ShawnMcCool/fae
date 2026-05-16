@@ -31,6 +31,14 @@ fae-*.tar
 # Ignore digested assets cache.
 /priv/static/cache_manifest.json
 
+# Phoenix digest output — hash-suffixed and gzipped variants of static assets.
+# The originals (favicon.ico, robots.txt, images/logo.svg) are still tracked;
+# only the build-time derivatives are ignored.
+/priv/static/**/*.gz
+/priv/static/favicon-*.ico
+/priv/static/robots-*.txt
+/priv/static/images/logo-*.svg
+
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
 /assets/node_modules/

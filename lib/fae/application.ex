@@ -11,6 +11,7 @@ defmodule Fae.Application do
       FaeWeb.Telemetry,
       Fae.Repo,
       {Ecto.Migrator, repos: Application.fetch_env!(:fae, :ecto_repos), skip: skip_migrations?()},
+      {Oban, Application.fetch_env!(:fae, Oban)},
       {DNSCluster, query: Application.get_env(:fae, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Fae.PubSub},
       Fae.SystemStatus,

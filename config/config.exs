@@ -11,6 +11,15 @@ config :fae,
   ecto_repos: [Fae.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+# Oban with the SQLite-native Lite engine. The self_update queue is
+# concurrency 1 — only one update can be in flight at a time (it writes
+# to the install dir on disk). Cron entries are added in the modules
+# that own them (e.g., self-update's CheckerJob), not here.
+config :fae, Oban,
+  engine: Oban.Engines.Lite,
+  repo: Fae.Repo,
+  queues: [self_update: 1]
+
 # Configure the endpoint
 config :fae, FaeWeb.Endpoint,
   url: [host: "localhost"],
