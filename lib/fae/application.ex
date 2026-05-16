@@ -44,6 +44,8 @@ defmodule Fae.Application do
       Fae.SelfUpdate.boot!()
     end
 
+    Fae.Backups.boot!()
+
     result
   end
 

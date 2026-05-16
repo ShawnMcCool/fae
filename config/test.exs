@@ -9,6 +9,12 @@ config :fae, Fae.SystemStatus, tick_interval_ms: :infinity
 # job queue's worker pool or cron schedule firing at real wall-clock time.
 config :fae, Oban, testing: :inline
 
+# Disable the application-level Backups.Scheduler in tests so its
+# global GenServer doesn't fight with per-test SQL sandboxes. Tests
+# that need scheduling logic start a Scheduler manually inside the
+# test's sandbox.
+config :fae, Fae.Backups.Scheduler, enabled: false
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used

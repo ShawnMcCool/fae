@@ -15,7 +15,10 @@ defmodule Fae.Backups.Supervisor do
 
   @impl true
   def init(_opts) do
-    children = []
+    children = [
+      Fae.Backups.RunRegistry,
+      Fae.Backups.Scheduler
+    ]
 
     # max_restarts/max_seconds explicit per OTP discipline.
     Supervisor.init(children,

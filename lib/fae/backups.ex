@@ -11,6 +11,7 @@ defmodule Fae.Backups do
   truth for live state.
   """
 
+  alias Fae.Backups.RunWorker
   alias Fae.Topics
 
   @doc """
@@ -31,5 +32,34 @@ defmodule Fae.Backups do
   @spec subscribe_jobs() :: :ok | {:error, term()}
   def subscribe_jobs do
     Phoenix.PubSub.subscribe(Fae.PubSub, Topics.backups_jobs())
+  end
+
+  @doc """
+  Enqueues an out-of-schedule "Run now" Oban job. Returns the
+  inserted job (or an error tuple from `Oban.insert/1`).
+
+  Skip-if-overlapping still applies: if a run is already in flight
+  for this job, the worker will record a `"skipped"` run row and
+  exit when this job reaches the front of the queue.
+  """
+  @spec run_now(String.t()) :: {:ok, Oban.Job.t()} | {:error, term()}
+  def run_now(job_id) when is_binary(job_id) do
+    %{"job_id" => job_id, "kind" => "manual"}
+    |> RunWorker.new()
+    |> Oban.insert()
+  end
+
+  @doc """
+  App-boot hook. Asks the Scheduler to rehydrate scheduling for
+  every enabled job. Called from `Fae.Application` after the
+  supervision tree is up.
+  """
+  @spec boot!() :: :ok
+  def boot! do
+    if Fae.Backups.Scheduler.enabled?() do
+      Fae.Backups.Scheduler.hydrate()
+    end
+
+    :ok
   end
 end
