@@ -66,9 +66,12 @@ echo "==> Generating SHA256SUMS"
 cat _build/prod/SHA256SUMS
 
 echo "==> Creating GitHub release ${TAG}"
+# --generate-notes asks GitHub to autogenerate release notes from
+# commits and PRs since the previous tag. Beats a static "Release vX"
+# string for visibility into what actually changed.
 gh release create "${TAG}" \
   --title "${TAG}" \
-  --notes "Release ${TAG}" \
+  --generate-notes \
   "_build/prod/${ARTIFACT}" \
   "_build/prod/SHA256SUMS"
 

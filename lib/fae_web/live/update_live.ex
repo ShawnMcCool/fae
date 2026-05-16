@@ -2,9 +2,9 @@ defmodule FaeWeb.UpdateLive do
   @moduledoc """
   LiveView for in-app self-update. Renders the current version,
   classification of the latest known release, and offers Check Now /
-  Update Now / Cancel actions. Subscribes to both
-  `self_update:status` and `self_update:progress` so progress is
-  reflected in real time without polling.
+  Update Now / Cancel actions. Surfaces the systemd unit's state and
+  exposes Restart / Stop. Subscribes to both `self_update:status` and
+  `self_update:progress` so progress is reflected in real time.
   """
 
   use FaeWeb, :live_view
@@ -22,6 +22,8 @@ defmodule FaeWeb.UpdateLive do
      socket
      |> assign(:current_version, Fae.Version.current_version())
      |> assign(:enabled?, SelfUpdate.enabled?())
+     |> assign(:service_state, SelfUpdate.service_state())
+     |> assign(:last_check_at, last_check_at())
      |> assign_cached_release()
      |> assign_apply_status()}
   end
@@ -29,8 +31,8 @@ defmodule FaeWeb.UpdateLive do
   @impl true
   def handle_event("check_now", _params, socket) do
     case SelfUpdate.check_now() do
-      {:ok, _job} -> {:noreply, assign(socket, :flash_message, "Check enqueued")}
-      {:error, _} -> {:noreply, assign(socket, :flash_message, "Could not enqueue check")}
+      {:ok, _job} -> {:noreply, assign(socket, :checking?, true)}
+      {:error, _} -> {:noreply, socket}
     end
   end
 
@@ -49,6 +51,16 @@ defmodule FaeWeb.UpdateLive do
     {:noreply, socket}
   end
 
+  def handle_event("restart_service", _params, socket) do
+    _ = SelfUpdate.service_restart()
+    {:noreply, socket}
+  end
+
+  def handle_event("stop_service", _params, socket) do
+    _ = SelfUpdate.service_stop()
+    {:noreply, socket}
+  end
+
   @impl true
   def handle_info({:check_started}, socket) do
     {:noreply, assign(socket, :checking?, true)}
@@ -58,6 +70,7 @@ defmodule FaeWeb.UpdateLive do
     {:noreply,
      socket
      |> assign(:checking?, false)
+     |> assign(:last_check_at, last_check_at())
      |> assign_cached_release()}
   end
 
@@ -117,16 +130,24 @@ defmodule FaeWeb.UpdateLive do
     |> assign(:apply_error, error)
     |> assign(:apply_percent, nil)
     |> assign(:checking?, false)
-    |> assign(:flash_message, nil)
   end
 
-  @doc "Human-readable label for a classification. Public for testing."
+  defp last_check_at do
+    case Fae.SelfUpdate.Storage.get_last_check_at() do
+      {:ok, at} -> at
+      :none -> nil
+    end
+  end
+
+  # --- Pure helpers (tested directly in UpdateLiveTest) ---
+
+  @doc "Human-readable label for a classification."
   def classification_label(:update_available), do: "Update available"
   def classification_label(:up_to_date), do: "Up to date"
   def classification_label(:ahead_of_release), do: "Ahead of latest release"
   def classification_label(:unknown), do: "Unknown"
 
-  @doc "Human-readable label for an apply phase. Public for testing."
+  @doc "Human-readable label for an apply phase."
   def phase_label(:idle), do: "Idle"
   def phase_label(:preparing), do: "Preparing"
   def phase_label(:downloading), do: "Downloading"
@@ -148,6 +169,87 @@ defmodule FaeWeb.UpdateLive do
       do: true
 
   def show_cancel_button?(_), do: false
+
+  @doc """
+  Relative-time label like "2m ago" or "just now" for a past timestamp.
+  Returns nil for nil input.
+  """
+  def time_ago(at, now \\ DateTime.utc_now())
+  def time_ago(nil, _now), do: nil
+
+  def time_ago(%DateTime{} = at, %DateTime{} = now) do
+    seconds = DateTime.diff(now, at, :second)
+
+    cond do
+      seconds < 5 -> "just now"
+      seconds < 60 -> "#{seconds}s ago"
+      seconds < 3600 -> "#{div(seconds, 60)}m ago"
+      seconds < 86_400 -> "#{div(seconds, 3600)}h ago"
+      true -> "#{div(seconds, 86_400)}d ago"
+    end
+  end
+
+  @doc """
+  Human-readable label for an error reason from the check or apply pipeline.
+  Pure: takes a structured error tuple/atom, returns a string.
+  """
+  def error_label(:no_update_pending), do: "No update is available right now."
+  def error_label(:invalid_tag), do: "The latest release tag is malformed."
+  def error_label(:already_running), do: "An update is already in progress."
+  def error_label(:not_running), do: "No update is in progress."
+
+  def error_label(:past_point_of_no_return),
+    do: "The installer has already started; cancellation is no longer possible."
+
+  def error_label(:not_found), do: "GitHub returned 404 — no releases yet?"
+  def error_label(:malformed), do: "GitHub API returned an unexpected response shape."
+
+  def error_label({:rate_limited, reset_at}),
+    do: "GitHub API rate limit hit. Resets at #{format_at(reset_at)}."
+
+  def error_label({:http_error, status}), do: "GitHub API returned HTTP #{status}."
+
+  def error_label({:transport_error, _reason}),
+    do: "Network error reaching GitHub. Check your connection."
+
+  def error_label({:download, reason}), do: "Download failed: #{error_label(reason)}"
+  def error_label({:stage, reason}), do: "Staging failed: #{stage_error_label(reason)}"
+  def error_label({:handoff, reason}), do: "Handoff to installer failed: #{inspect(reason)}"
+  def error_label({:task_crashed, _reason}), do: "Apply task crashed unexpectedly."
+
+  def error_label(:checksum_mismatch),
+    do: "Downloaded tarball did not match its published SHA256."
+
+  def error_label(:checksum_missing),
+    do: "Couldn't find this tarball's checksum entry in SHA256SUMS."
+
+  def error_label(:too_large), do: "Download exceeded the 200MB size cap."
+  def error_label(other), do: "Unexpected error: #{inspect(other)}"
+
+  defp stage_error_label(:absolute_path), do: "tarball contains an absolute path"
+  defp stage_error_label(:path_traversal), do: "tarball contains a parent-dir traversal"
+  defp stage_error_label(:symlink), do: "tarball contains a symlink"
+  defp stage_error_label(:non_regular_file), do: "tarball contains a non-regular file"
+  defp stage_error_label(:oversized), do: "tarball is too large"
+
+  defp stage_error_label({:missing_required, paths}),
+    do: "missing required files: #{Enum.join(paths, ", ")}"
+
+  defp stage_error_label({:tar_error, _reason}), do: "tar extraction failed"
+  defp stage_error_label(other), do: "stage error: #{inspect(other)}"
+
+  defp format_at(nil), do: "an unknown time"
+  defp format_at(%DateTime{} = dt), do: Calendar.strftime(dt, "%H:%M UTC")
+
+  @doc "Human-readable label for a systemd service state map (from Service.state/0)."
+  def service_state_label(%{under_systemd: false}), do: "Not under systemd"
+  def service_state_label(%{active: true, enabled: true}), do: "Active, enabled at boot"
+  def service_state_label(%{active: true, enabled: false}), do: "Active, not enabled at boot"
+  def service_state_label(%{active: false}), do: "Inactive"
+
+  @doc "Should the Restart / Stop buttons be visible?"
+  def show_service_controls?(%{under_systemd: true, systemd_available: true}), do: true
+  def show_service_controls?(_), do: false
 
   @impl true
   def render(assigns) do
@@ -174,16 +276,26 @@ defmodule FaeWeb.UpdateLive do
               {classification_label(@classification)}
             </span>
           </div>
-          <%= if @latest_release do %>
-            <div class="mt-2 text-sm opacity-75 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 items-baseline">
+          <div class="mt-2 text-sm opacity-75 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 items-baseline">
+            <%= if @latest_release do %>
               <span>Latest tag</span>
-              <span id="latest-tag" class="font-mono">{@latest_release.tag}</span>
+              <span id="latest-tag" class="font-mono">
+                <a href={@latest_release.html_url} target="_blank" rel="noopener" class="link">
+                  {@latest_release.tag}
+                </a>
+              </span>
               <span>Published</span>
               <span id="latest-published">
                 {Calendar.strftime(@latest_release.published_at, "%Y-%m-%d %H:%M UTC")}
               </span>
-            </div>
-          <% end %>
+            <% end %>
+            <%= if @last_check_at do %>
+              <span>Last checked</span>
+              <span id="last-checked" title={DateTime.to_iso8601(@last_check_at)}>
+                {time_ago(@last_check_at)}
+              </span>
+            <% end %>
+          </div>
         </div>
 
         <div id="apply-status" class="card bg-base-200 p-4">
@@ -201,7 +313,7 @@ defmodule FaeWeb.UpdateLive do
           <% end %>
           <%= if @apply_error do %>
             <div id="apply-error" class="alert alert-soft alert-error text-sm mt-2">
-              {inspect(@apply_error)}
+              {error_label(@apply_error)}
             </div>
           <% end %>
         </div>
@@ -236,6 +348,40 @@ defmodule FaeWeb.UpdateLive do
             ><%= @latest_release.body %></pre>
           </details>
         <% end %>
+
+        <div id="service" class="card bg-base-200 p-4 space-y-3">
+          <div class="flex flex-row items-baseline justify-between">
+            <h2 class="text-lg font-medium">Service</h2>
+            <span id="service-state-label" class="text-sm">
+              {service_state_label(@service_state)}
+            </span>
+          </div>
+          <%= if @service_state.unit_name do %>
+            <div class="text-sm opacity-75 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 items-baseline">
+              <span>Unit</span>
+              <span id="service-unit" class="font-mono">{@service_state.unit_name}</span>
+            </div>
+          <% end %>
+          <%= if show_service_controls?(@service_state) do %>
+            <div class="flex flex-row gap-2 flex-wrap">
+              <button
+                id="restart-service"
+                class="btn btn-soft btn-warning"
+                phx-click="restart_service"
+              >
+                Restart service
+              </button>
+              <button
+                id="stop-service"
+                class="btn btn-ghost"
+                phx-click="stop_service"
+                data-confirm="Really stop the service? You'll need to run `systemctl --user start fae` from a terminal to bring it back."
+              >
+                Stop service
+              </button>
+            </div>
+          <% end %>
+        </div>
       </section>
     </Layouts.app>
     """

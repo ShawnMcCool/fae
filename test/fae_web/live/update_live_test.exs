@@ -59,6 +59,60 @@ defmodule FaeWeb.UpdateLiveTest do
                "expected cancel button hidden during #{phase}"
       end
     end
+
+    test "time_ago/2 buckets sub-minute, minutes, hours, days" do
+      now = ~U[2026-05-16 12:00:00Z]
+
+      assert UpdateLive.time_ago(nil, now) == nil
+      assert UpdateLive.time_ago(DateTime.add(now, -2, :second), now) == "just now"
+      assert UpdateLive.time_ago(DateTime.add(now, -30, :second), now) == "30s ago"
+      assert UpdateLive.time_ago(DateTime.add(now, -120, :second), now) == "2m ago"
+      assert UpdateLive.time_ago(DateTime.add(now, -7200, :second), now) == "2h ago"
+      assert UpdateLive.time_ago(DateTime.add(now, -172_800, :second), now) == "2d ago"
+    end
+
+    test "error_label maps known structured errors to human strings" do
+      assert UpdateLive.error_label(:no_update_pending) =~ "No update"
+      assert UpdateLive.error_label(:invalid_tag) =~ "malformed"
+      assert UpdateLive.error_label(:already_running) =~ "already in progress"
+      assert UpdateLive.error_label(:not_found) =~ "404"
+      assert UpdateLive.error_label({:http_error, 500}) =~ "HTTP 500"
+
+      assert UpdateLive.error_label({:rate_limited, ~U[2026-05-16 13:00:00Z]}) =~ "rate limit"
+
+      assert UpdateLive.error_label({:download, :checksum_mismatch}) =~ "Download failed"
+      assert UpdateLive.error_label({:download, :checksum_mismatch}) =~ "SHA256"
+
+      assert UpdateLive.error_label({:stage, :symlink}) =~ "symlink"
+
+      assert UpdateLive.error_label({:stage, {:missing_required, ["bin/fae-install"]}}) =~
+               "bin/fae-install"
+
+      assert UpdateLive.error_label({:task_crashed, :killed}) =~ "crashed"
+    end
+
+    test "error_label falls back gracefully for unknown shapes" do
+      assert UpdateLive.error_label(:something_unexpected) =~ "Unexpected"
+    end
+
+    test "service_state_label/1" do
+      assert UpdateLive.service_state_label(%{under_systemd: false}) == "Not under systemd"
+
+      assert UpdateLive.service_state_label(%{under_systemd: true, active: true, enabled: true}) ==
+               "Active, enabled at boot"
+
+      assert UpdateLive.service_state_label(%{under_systemd: true, active: true, enabled: false}) ==
+               "Active, not enabled at boot"
+
+      assert UpdateLive.service_state_label(%{under_systemd: true, active: false, enabled: false}) ==
+               "Inactive"
+    end
+
+    test "show_service_controls? requires under_systemd AND systemd_available" do
+      assert UpdateLive.show_service_controls?(%{under_systemd: true, systemd_available: true})
+      refute UpdateLive.show_service_controls?(%{under_systemd: false, systemd_available: true})
+      refute UpdateLive.show_service_controls?(%{under_systemd: true, systemd_available: false})
+    end
   end
 
   describe "GET /update" do
