@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# bin/release — cuts a GitHub release of the current mix.exs version.
+#
+#   1. Runs bin/build (compiles, builds assets, assembles tar).
+#   2. Renames the mix-produced tarball to include the linux-x86_64
+#      platform suffix that Fae.SelfUpdate.Updater expects in its
+#      download URL.
+#   3. Generates SHA256SUMS for the renamed tarball.
+#   4. Creates the GitHub release at tag v<version> on the current
+#      commit, uploading the tarball + SHA256SUMS as assets.
+#
+# Prereqs:
+#   - Working tree is clean and the version in mix.exs has been bumped
+#     past the latest published release.
+#   - gh CLI is authenticated against github.com.
+#   - All changes are pushed (the release tags the current commit).
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+# Extract version from mix.exs. Matches the first `version: "x.y.z"` line.
+VERSION="$(grep -E '^\s*version:' mix.exs | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
+if [[ -z "$VERSION" ]]; then
+  echo "Error: could not parse version from mix.exs" >&2
+  exit 1
+fi
+TAG="v${VERSION}"
+
+PLATFORM="linux-x86_64"
+ARTIFACT="fae-${VERSION}-${PLATFORM}.tar.gz"
+MIX_TARBALL="_build/prod/fae-${VERSION}.tar.gz"
+
+echo "==> Release version: ${VERSION} (tag ${TAG})"
+
+# Refuse to release if the working tree has uncommitted changes.
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Error: working tree is dirty. Commit or stash before releasing." >&2
+  git status --short
+  exit 1
+fi
+
+# Refuse if the tag already exists locally or on GitHub.
+if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+  echo "Error: tag ${TAG} already exists locally. Bump version in mix.exs first." >&2
+  exit 1
+fi
+if gh release view "${TAG}" >/dev/null 2>&1; then
+  echo "Error: release ${TAG} already exists on GitHub. Bump version in mix.exs first." >&2
+  exit 1
+fi
+
+# Build.
+./bin/build
+
+if [[ ! -f "${MIX_TARBALL}" ]]; then
+  echo "Error: expected tarball at ${MIX_TARBALL} but it isn't there." >&2
+  exit 1
+fi
+
+echo "==> Renaming ${MIX_TARBALL} to ${ARTIFACT}"
+cp "${MIX_TARBALL}" "_build/prod/${ARTIFACT}"
+
+echo "==> Generating SHA256SUMS"
+(cd _build/prod && sha256sum "${ARTIFACT}" > SHA256SUMS)
+cat _build/prod/SHA256SUMS
+
+echo "==> Creating GitHub release ${TAG}"
+gh release create "${TAG}" \
+  --title "${TAG}" \
+  --notes "Release ${TAG}" \
+  "_build/prod/${ARTIFACT}" \
+  "_build/prod/SHA256SUMS"
+
+cat <<MSG
+
+Released ${TAG}.
+
+Verify:
+  gh release view ${TAG}
+
+Running fae instances will pick this up at the next 6-hour cron tick
+(or immediately via "Check now" on the Updates page).
+MSG

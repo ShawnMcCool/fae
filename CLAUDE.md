@@ -4,10 +4,11 @@ Fae is a personal tooling hub that runs as a user systemd service on a single-us
 
 ## Read these first
 
-Architectural and design decisions live in `docs/decisions/` in MADR 4.0 lean format. **Read the two Fae-originating decisions before writing code** — they establish the foundational stance and the auth/trust model:
+Architectural and design decisions live in `docs/decisions/` in MADR 4.0 lean format. **Read the Fae-originating decisions before writing code** — they establish the foundational stance, the auth/trust model, and the self-update trust model:
 
 - `docs/decisions/architecture/2026-05-16-027-desktop-application-with-realtime-web-ui.md` — Fae is a desktop app; state lives in supervised processes; the DB is persistence, not source of truth; UI is LiveView + PubSub only; tools are sub-supervisor trees.
 - `docs/decisions/architecture/2026-05-16-028-no-application-layer-auth-on-single-user-desktop.md` — no login; loopback-only binding is the trust model; reversal triggers are documented.
+- `docs/decisions/architecture/2026-05-16-029-self-update-via-public-github-releases.md` — self-update polls public GitHub Releases, verifies SHA256, runs a detached installer; trust is anchored to TLS + GitHub account; no GPG signing in v1, but reversal triggers documented.
 
 The remaining decisions in `docs/decisions/` originated in the central library at `~/src/decisions/` and were imported for relevance to Fae. Categories:
 
@@ -25,11 +26,12 @@ New Fae-specific decisions land here first and may later be harvested into `~/sr
 - `mix release` packaged as a systemd user unit
 - Binds **`127.0.0.1` only** — this is enforced in `runtime.exs`; the trust model depends on it
 
-## Build, install, run
+## Build, install, run, release
 
 ```
-bin/build      # produces _build/prod/rel/fae (assets compiled, release assembled)
+bin/build      # produces _build/prod/rel/fae (assets + release + tarball)
 bin/install    # copies release to ~/.local/opt/fae, installs systemd unit, enables, starts
+bin/release    # cuts a GitHub release at v<version-in-mix.exs> (manual publish flow)
 ```
 
 After install:

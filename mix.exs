@@ -16,7 +16,10 @@ defmodule Fae.MixProject do
         fae: [
           version: "0.1.0",
           include_executables_for: [:unix],
-          applications: [fae: :permanent]
+          applications: [fae: :permanent],
+          # :tar produces _build/prod/fae-<version>.tar.gz which bin/release
+          # then renames + checksum-pairs for publishing to GitHub.
+          steps: [:assemble, :tar]
         ]
       ]
     ]
