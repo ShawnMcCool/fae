@@ -74,7 +74,9 @@ defmodule Fae.MixProject do
       {:bandit, "~> 1.5"},
       {:oban, "~> 2.19"},
       {:req, "~> 0.5"},
-      {:tzdata, "~> 1.1"}
+      {:tzdata, "~> 1.1"},
+      {:aws_signature, "~> 0.4"},
+      {:mox, "~> 1.1", only: :test}
     ]
   end
 
