@@ -18,6 +18,7 @@ defmodule FaeWeb.Router do
     pipe_through :browser
 
     live "/", DashboardLive
+    live "/update", UpdateLive
   end
 
   # Other scopes may use custom stacks.
