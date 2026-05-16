@@ -25,6 +25,24 @@ New Fae-specific decisions land here first and may later be harvested into `~/sr
 - `mix release` packaged as a systemd user unit
 - Binds **`127.0.0.1` only** — this is enforced in `runtime.exs`; the trust model depends on it
 
+## Build, install, run
+
+```
+bin/build      # produces _build/prod/rel/fae (assets compiled, release assembled)
+bin/install    # copies release to ~/.local/opt/fae, installs systemd unit, enables, starts
+```
+
+After install:
+
+```
+systemctl --user status fae
+journalctl --user -u fae -f
+```
+
+Then open <http://127.0.0.1:4321>.
+
+The systemd unit lives at `contrib/systemd/fae.service`. The release tree includes a `bin/server` wrapper (from `rel/overlays/bin/server`) that sets `PHX_SERVER=true` and starts the release. The first boot in production auto-generates and persists a `secret_key_base` at `~/.local/share/fae/secret_key_base` (mode 0600).
+
 ## Filesystem layout (XDG)
 
 - App DB: `~/.local/share/fae/fae.db`

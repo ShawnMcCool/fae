@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Install Fae as a user systemd service.
+# Assumes you've already run `bin/build` to produce _build/prod/rel/fae.
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+RELEASE_SRC="_build/prod/rel/fae"
+INSTALL_DIR="${HOME}/.local/opt/fae"
+SYSTEMD_DIR="${HOME}/.config/systemd/user"
+SERVICE_NAME="fae.service"
+
+if [[ ! -d "$RELEASE_SRC" ]]; then
+  echo "Error: $RELEASE_SRC not found. Run bin/build first." >&2
+  exit 1
+fi
+
+echo "==> Installing release to $INSTALL_DIR"
+mkdir -p "$(dirname "$INSTALL_DIR")"
+rm -rf "$INSTALL_DIR"
+cp -r "$RELEASE_SRC" "$INSTALL_DIR"
+
+echo "==> Installing systemd unit to $SYSTEMD_DIR/$SERVICE_NAME"
+mkdir -p "$SYSTEMD_DIR"
+cp contrib/systemd/fae.service "$SYSTEMD_DIR/$SERVICE_NAME"
+
+echo "==> Enabling linger (so the service runs without an active login)"
+loginctl enable-linger "$USER" || true
+
+echo "==> Reloading systemd user units"
+systemctl --user daemon-reload
+
+echo "==> Enabling and (re)starting fae"
+systemctl --user enable --now fae
+
+echo
+echo "Done. Useful commands:"
+echo "  systemctl --user status fae"
+echo "  journalctl --user -u fae -f"
+echo "  systemctl --user restart fae"
+echo
+echo "Then open: http://127.0.0.1:4321"

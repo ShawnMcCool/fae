@@ -11,7 +11,14 @@ defmodule Fae.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      releases: [
+        fae: [
+          version: "0.1.0",
+          include_executables_for: [:unix],
+          applications: [fae: :permanent]
+        ]
+      ]
     ]
   end
 

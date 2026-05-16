@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Build a production release of Fae.
+#
+# Output: _build/prod/rel/fae/ (a self-contained release tree)
+# Run with: _build/prod/rel/fae/bin/server
+#
+# To install as a systemd user service, see contrib/systemd/fae.service.
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+echo "==> Fetching prod deps..."
+MIX_ENV=prod mix deps.get --only prod
+
+echo "==> Compiling..."
+MIX_ENV=prod mix compile
+
+echo "==> Building assets..."
+MIX_ENV=prod mix assets.deploy
+
+echo "==> Assembling release..."
+MIX_ENV=prod mix release --overwrite
+
+cat <<MSG
+
+Release built: _build/prod/rel/fae
+
+To run locally:
+  _build/prod/rel/fae/bin/server
+
+To install as a user systemd service:
+  bin/install
+MSG

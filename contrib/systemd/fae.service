@@ -1,0 +1,21 @@
+[Unit]
+Description=Fae — personal tooling hub
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/opt/fae/bin/server
+Restart=on-failure
+RestartSec=5
+
+# PHX_SERVER=true is what tells runtime.exs to enable the HTTP listener.
+# Without it, the release boots but never opens its port.
+Environment=PHX_SERVER=true
+Environment=PORT=4321
+
+# Send all output to the journal. View with: journalctl --user -u fae -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

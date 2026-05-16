@@ -3,93 +3,55 @@ import Config
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration
-# and secrets from environment variables or elsewhere. Do not define
-# any compile-time configuration in here, as it won't be applied.
-# The block below contains prod specific runtime configuration.
+# and secrets from environment variables or elsewhere.
 
-# ## Using releases
-#
-# If you use `mix release`, you need to explicitly enable the server
-# by passing the PHX_SERVER=true when you start it:
-#
-#     PHX_SERVER=true bin/fae start
-#
-# Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
-# script that automatically sets the env var above.
+# Releases need explicit opt-in to start the HTTP server.
 if System.get_env("PHX_SERVER") do
   config :fae, FaeWeb.Endpoint, server: true
 end
 
-config :fae, FaeWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
-
 if config_env() == :prod do
-  database_path =
-    System.get_env("DATABASE_PATH") ||
-      raise """
-      environment variable DATABASE_PATH is missing.
-      For example: /etc/fae/fae.db
-      """
+  # XDG-compliant data directory: $XDG_DATA_HOME/fae or $HOME/.local/share/fae
+  data_home =
+    System.get_env("XDG_DATA_HOME") ||
+      Path.join(System.fetch_env!("HOME"), ".local/share")
+
+  fae_data_dir = Path.join(data_home, "fae")
+  File.mkdir_p!(fae_data_dir)
+
+  database_path = System.get_env("DATABASE_PATH") || Path.join(fae_data_dir, "fae.db")
+
+  # Auto-generated and persisted on first run. This is a desktop app — the
+  # user should not have to manage application secrets manually. The key
+  # file is mode 0600; same threat model as ~/.ssh/id_*.
+  secret_key_path = Path.join(fae_data_dir, "secret_key_base")
+
+  secret_key_base =
+    case File.read(secret_key_path) do
+      {:ok, key} ->
+        String.trim(key)
+
+      _ ->
+        key = :crypto.strong_rand_bytes(48) |> Base.encode64() |> String.trim()
+        File.write!(secret_key_path, key)
+        File.chmod!(secret_key_path, 0o600)
+        key
+    end
+
+  port = String.to_integer(System.get_env("PORT", "4321"))
 
   config :fae, Fae.Repo,
     database: database_path,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5")
 
-  # The secret key base is used to sign/encrypt cookies and other secrets.
-  # A default value is used in config/dev.exs and config/test.exs but you
-  # want to use a different value for prod and you most likely don't want
-  # to check this value into version control, so we use an environment
-  # variable instead.
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      environment variable SECRET_KEY_BASE is missing.
-      You can generate one by calling: mix phx.gen.secret
-      """
-
-  host = System.get_env("PHX_HOST") || "example.com"
-
-  config :fae, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
-
+  # CRITICAL — load-bearing for the trust model. Fae has no application-layer
+  # authentication (see docs/decisions/architecture/
+  # 2026-05-16-028-no-application-layer-auth-on-single-user-desktop.md). The
+  # entire security posture rests on this binding being 127.0.0.1 only. Do
+  # NOT change to {0, 0, 0, 0} or {0, 0, 0, 0, 0, 0, 0, 0} without revisiting
+  # that decision and implementing app-layer auth.
   config :fae, FaeWeb.Endpoint,
-    url: [host: host, port: 443, scheme: "https"],
-    http: [
-      # Enable IPv6 and bind on all interfaces.
-      # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
-      # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
-      # for details about using IPv6 vs IPv4 and loopback vs public addresses.
-      ip: {0, 0, 0, 0, 0, 0, 0, 0}
-    ],
+    url: [host: "127.0.0.1", port: port, scheme: "http"],
+    http: [ip: {127, 0, 0, 1}, port: port],
     secret_key_base: secret_key_base
-
-  # ## SSL Support
-  #
-  # To get SSL working, you will need to add the `https` key
-  # to your endpoint configuration:
-  #
-  #     config :fae, FaeWeb.Endpoint,
-  #       https: [
-  #         ...,
-  #         port: 443,
-  #         cipher_suite: :strong,
-  #         keyfile: System.get_env("SOME_APP_SSL_KEY_PATH"),
-  #         certfile: System.get_env("SOME_APP_SSL_CERT_PATH")
-  #       ]
-  #
-  # The `cipher_suite` is set to `:strong` to support only the
-  # latest and more secure SSL ciphers. This means old browsers
-  # and clients may not be supported. You can set it to
-  # `:compatible` for wider support.
-  #
-  # `:keyfile` and `:certfile` expect an absolute path to the key
-  # and cert in disk or a relative path inside priv, for example
-  # "priv/ssl/server.key". For all supported SSL configuration
-  # options, see https://hexdocs.pm/plug/Plug.SSL.html#configure/1
-  #
-  # We also recommend setting `force_ssl` in your config/prod.exs,
-  # ensuring no data is ever sent via http, always redirecting to https:
-  #
-  #     config :fae, FaeWeb.Endpoint,
-  #       force_ssl: [hsts: true]
-  #
-  # Check `Plug.SSL` for all available options in `force_ssl`.
 end

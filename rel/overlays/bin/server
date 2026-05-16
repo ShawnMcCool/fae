@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Convenience launcher: starts the release with the HTTP server enabled.
+# Equivalent to `PHX_SERVER=true bin/fae start` from the same release tree.
+PHX_SERVER=true exec "$(dirname "$0")/fae" start
