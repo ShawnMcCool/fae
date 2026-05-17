@@ -25,6 +25,16 @@ defmodule Fae.Backups.Runs do
     )
   end
 
+  @spec list_recent_all(pos_integer()) :: [Run.t()]
+  def list_recent_all(limit \\ 10) do
+    Repo.all(
+      from r in Run,
+        order_by: [desc: r.started_at],
+        limit: ^limit,
+        preload: [:job]
+    )
+  end
+
   @spec last(Ecto.UUID.t()) :: Run.t() | nil
   def last(job_id) do
     Repo.one(
