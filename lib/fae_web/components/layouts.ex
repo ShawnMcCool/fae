@@ -72,7 +72,7 @@ defmodule FaeWeb.Layouts do
   defp sidebar(assigns) do
     ~H"""
     <aside
-      class="flex flex-col w-14 shrink-0 bg-base-200 border-r border-base-300 sticky top-0 self-start h-screen"
+      class="flex flex-col w-14 shrink-0 bg-base-200 border-r border-base-300 sticky top-0 self-start h-screen z-20"
       data-role="sidebar"
     >
       <nav class="flex flex-col items-center gap-1 py-3 flex-1">
