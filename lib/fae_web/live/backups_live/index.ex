@@ -120,27 +120,29 @@ defmodule FaeWeb.BackupsLive.Index do
                       {last_run_cell(assigns, last_run)}
                     </td>
                     <td class="text-sm">{format_dt(next_fire, job.enabled)}</td>
-                    <td class="text-right space-x-1">
-                      <button
-                        type="button"
-                        phx-click="run_now"
-                        phx-value-id={job.id}
-                        class="btn btn-xs btn-primary"
-                      >
-                        Run now
-                      </button>
-                      <.link navigate={~p"/backups/#{job.id}/edit"} class="btn btn-xs btn-ghost">
-                        Edit
-                      </.link>
-                      <button
-                        type="button"
-                        phx-click="delete"
-                        phx-value-id={job.id}
-                        data-confirm={"Delete '#{job.name}'?"}
-                        class="btn btn-xs btn-error btn-outline"
-                      >
-                        Delete
-                      </button>
+                    <td class="whitespace-nowrap">
+                      <div class="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          phx-click="run_now"
+                          phx-value-id={job.id}
+                          class="btn btn-xs btn-primary"
+                        >
+                          Run now
+                        </button>
+                        <.link navigate={~p"/backups/#{job.id}/edit"} class="btn btn-xs btn-ghost">
+                          Edit
+                        </.link>
+                        <button
+                          type="button"
+                          phx-click="delete"
+                          phx-value-id={job.id}
+                          data-confirm={"Delete '#{job.name}'?"}
+                          class="btn btn-xs btn-error btn-outline"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 <% end %>

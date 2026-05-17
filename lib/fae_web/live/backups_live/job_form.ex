@@ -259,7 +259,7 @@ defmodule FaeWeb.BackupsLive.JobForm do
 
             <div class="divider text-sm">Schedule</div>
 
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label class="label">Recurrence</label>
                 <.input
@@ -285,9 +285,11 @@ defmodule FaeWeb.BackupsLive.JobForm do
               </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label class="label">Day of week (0=Sun … 6=Sat, weekly only)</label>
+                <label class="label whitespace-normal">
+                  Day of week (0=Sun … 6=Sat, weekly only)
+                </label>
                 <.input
                   field={@form[:day_of_week]}
                   type="number"
@@ -297,7 +299,7 @@ defmodule FaeWeb.BackupsLive.JobForm do
                 />
               </div>
               <div>
-                <label class="label">Day of month (1-28, monthly only)</label>
+                <label class="label whitespace-normal">Day of month (1-28, monthly only)</label>
                 <.input
                   field={@form[:day_of_month]}
                   type="number"
