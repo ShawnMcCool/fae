@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# bin/ship — full release flow for Fae.
+#
+# Usage: bin/ship [major|minor|patch]
+#
+# With no argument, ships the version currently in mix.exs.
+# With major/minor/patch, first bumps the version in mix.exs
+# (both the project version and releases[:fae].version) and creates
+# a "Bump version to vX.Y.Z" commit before shipping.
+#
+# Steps:
+#   1. Confirms we're on main with a clean working tree.
+#   2. Validates mix.exs's two version: lines are in sync.
+#   3. Computes the target version (and confirms its tag is free).
+#   4. (If bumping) edits mix.exs and commits the bump.
+#   5. Runs `mix precommit` (compile -Werror, deps.unlock --unused,
+#      format, test).
+#   6. Builds the production release via bin/build.
+#   7. Pushes commits to origin/main.
+#   8. Tags HEAD as v<version> and pushes the tag.
+#   9. Creates the GitHub release, uploading the renamed tarball
+#      (fae-<version>-linux-x86_64.tar.gz) and SHA256SUMS.
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+BUMP="${1:-}"
+case "$BUMP" in
+  ""|major|minor|patch) ;;
+  *)
+    echo "Error: invalid argument '$BUMP'. Use one of: major, minor, patch." >&2
+    exit 1
+    ;;
+esac
+
+# Parse the project version from mix.exs (first `version: "x.y.z"` line).
+VERSION="$(grep -E '^\s*version:' mix.exs | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
+if [[ -z "$VERSION" ]]; then
+  echo "Error: could not parse version from mix.exs" >&2
+  exit 1
+fi
+
+# Both `version:` lines (project + releases) must already match,
+# otherwise the bump's sed pass would only catch one of them and
+# bin/build would write a tarball under an unexpected name.
+VERSION_LINES="$(grep -cE '^\s*version:' mix.exs)"
+MATCHING_LINES="$(grep -cE '^\s*version:\s*"'"$VERSION"'"' mix.exs || true)"
+if [[ "$VERSION_LINES" != "$MATCHING_LINES" ]]; then
+  echo "Error: mix.exs version: lines are out of sync." >&2
+  grep -nE '^\s*version:' mix.exs >&2
+  exit 1
+fi
+
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "$BRANCH" != "main" ]]; then
+  echo "Error: not on main (current branch: ${BRANCH})." >&2
+  exit 1
+fi
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Error: working tree is dirty. Commit or stash before shipping." >&2
+  git status --short
+  exit 1
+fi
+
+# Compute the target version.
+if [[ -n "$BUMP" ]]; then
+  IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+  case "$BUMP" in
+    major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+    minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+    patch) PATCH=$((PATCH + 1)) ;;
+  esac
+  NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+else
+  NEW_VERSION="$VERSION"
+fi
+
+TAG="v${NEW_VERSION}"
+PLATFORM="linux-x86_64"
+ARTIFACT="fae-${NEW_VERSION}-${PLATFORM}.tar.gz"
+MIX_TARBALL="_build/prod/fae-${NEW_VERSION}.tar.gz"
+
+echo "==> Shipping ${TAG}"
+
+if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+  echo "Error: tag ${TAG} already exists locally." >&2
+  exit 1
+fi
+if git ls-remote --exit-code --tags origin "${TAG}" >/dev/null 2>&1; then
+  echo "Error: tag ${TAG} already exists on origin." >&2
+  exit 1
+fi
+if gh release view "${TAG}" >/dev/null 2>&1; then
+  echo "Error: release ${TAG} already exists on GitHub." >&2
+  exit 1
+fi
+
+if [[ -n "$BUMP" ]]; then
+  echo "==> Bumping mix.exs version: ${VERSION} -> ${NEW_VERSION}"
+  sed -i -E "s/(^\s*version:\s*)\"${VERSION}\"/\1\"${NEW_VERSION}\"/g" mix.exs
+
+  POST_LINES="$(grep -cE '^\s*version:\s*"'"$NEW_VERSION"'"' mix.exs || true)"
+  if [[ "$POST_LINES" != "$VERSION_LINES" ]]; then
+    echo "Error: version bump didn't update all version: lines in mix.exs." >&2
+    grep -nE '^\s*version:' mix.exs >&2
+    exit 1
+  fi
+
+  git add mix.exs
+  git commit -m "Bump version to ${TAG}"
+fi
+
+echo "==> Running mix precommit"
+mix precommit
+
+echo "==> Building production release"
+./bin/build
+
+if [[ ! -f "${MIX_TARBALL}" ]]; then
+  echo "Error: expected tarball at ${MIX_TARBALL} but it isn't there." >&2
+  exit 1
+fi
+
+echo "==> Renaming ${MIX_TARBALL} to ${ARTIFACT}"
+cp "${MIX_TARBALL}" "_build/prod/${ARTIFACT}"
+
+echo "==> Generating SHA256SUMS"
+(cd _build/prod && sha256sum "${ARTIFACT}" > SHA256SUMS)
+cat _build/prod/SHA256SUMS
+
+echo "==> Pushing commits to origin/main"
+git push origin main
+
+echo "==> Tagging ${TAG}"
+git tag -a "${TAG}" -m "${TAG}"
+
+echo "==> Pushing tag ${TAG}"
+git push origin "${TAG}"
+
+echo "==> Creating GitHub release ${TAG}"
+# --generate-notes asks GitHub to autogenerate release notes from
+# commits and PRs since the previous tag.
+gh release create "${TAG}" \
+  --title "${TAG}" \
+  --generate-notes \
+  "_build/prod/${ARTIFACT}" \
+  "_build/prod/SHA256SUMS"
+
+cat <<MSG
+
+Shipped ${TAG}.
+
+Verify:
+  gh release view ${TAG}
+
+Running fae instances will pick this up at the next 6-hour cron tick
+(or immediately via "Check now" on the Updates page).
+MSG
