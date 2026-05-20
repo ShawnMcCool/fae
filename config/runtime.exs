@@ -53,5 +53,6 @@ if config_env() == :prod do
   config :fae, FaeWeb.Endpoint,
     url: [host: "127.0.0.1", port: port, scheme: "http"],
     http: [ip: {127, 0, 0, 1}, port: port],
+    check_origin: ["//127.0.0.1:#{port}", "//localhost:#{port}"],
     secret_key_base: secret_key_base
 end
