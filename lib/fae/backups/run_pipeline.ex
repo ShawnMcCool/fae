@@ -40,7 +40,7 @@ defmodule Fae.Backups.RunPipeline do
 
   require Logger
 
-  alias Fae.Backups.{Drivers, Job, Jobs, Packager, Retention, Runs, Sources}
+  alias Fae.Backups.{Drivers, ErrorFormatter, Job, Jobs, Packager, Retention, Runs, Sources}
   alias Fae.Topics
 
   @type result ::
@@ -221,7 +221,8 @@ defmodule Fae.Backups.RunPipeline do
   end
 
   defp format_error(reason) do
-    inspect(reason, pretty: true, limit: :infinity, printable_limit: 4096)
+    reason
+    |> ErrorFormatter.format()
     |> String.slice(0, 4096)
   end
 

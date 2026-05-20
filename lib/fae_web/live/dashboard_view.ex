@@ -273,12 +273,18 @@ defmodule FaeWeb.DashboardView do
   defp error_preview(""), do: nil
 
   defp error_preview(message) when is_binary(message) do
-    trimmed = String.trim(message)
+    # The stored error_message is "<friendly summary>\n\n<inspect>".
+    # The preview shows only the friendly summary.
+    summary =
+      message
+      |> String.split("\n\n", parts: 2)
+      |> List.first()
+      |> String.trim()
 
-    if String.length(trimmed) > @recent_activity_error_preview_chars do
-      String.slice(trimmed, 0, @recent_activity_error_preview_chars) <> "…"
+    if String.length(summary) > @recent_activity_error_preview_chars do
+      String.slice(summary, 0, @recent_activity_error_preview_chars) <> "…"
     else
-      trimmed
+      summary
     end
   end
 

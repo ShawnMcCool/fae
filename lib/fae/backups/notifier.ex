@@ -76,7 +76,13 @@ defmodule Fae.Backups.Notifier do
   defp truncate(nil), do: "(no error message)"
 
   defp truncate(message) when is_binary(message) do
-    if String.length(message) > 200, do: String.slice(message, 0, 200) <> "…", else: message
+    summary =
+      message
+      |> String.split("\n\n", parts: 2)
+      |> List.first()
+      |> String.trim()
+
+    if String.length(summary) > 200, do: String.slice(summary, 0, 200) <> "…", else: summary
   end
 
   defp run_command(cmd, args) do
