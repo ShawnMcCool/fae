@@ -4,7 +4,7 @@ defmodule Fae.MixProject do
   def project do
     [
       app: :fae,
-      version: "0.3.0",
+      version: "0.4.0",
       elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -14,7 +14,7 @@ defmodule Fae.MixProject do
       listeners: [Phoenix.CodeReloader],
       releases: [
         fae: [
-          version: "0.3.0",
+          version: "0.4.0",
           include_executables_for: [:unix],
           applications: [fae: :permanent],
           # :tar produces _build/prod/fae-<version>.tar.gz which bin/release
