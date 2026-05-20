@@ -181,6 +181,7 @@ defmodule FaeWeb.BackupsLive.Index do
   defp status_class("running"), do: "badge-info"
   defp status_class("failed"), do: "badge-error"
   defp status_class("skipped"), do: "badge-warning"
+  defp status_class("snoozed"), do: "badge-warning"
   defp status_class(_), do: "badge-ghost"
 
   defp schedule_summary(%{enabled: false}), do: "(disabled)"

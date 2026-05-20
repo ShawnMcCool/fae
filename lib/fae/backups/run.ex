@@ -1,11 +1,16 @@
 defmodule Fae.Backups.Run do
   @moduledoc """
   One execution of a backup job. Created in `"running"` state at the
-  start of the pipeline; transitioned to `"success"`, `"failed"`, or
-  `"skipped"` when it finishes.
+  start of the pipeline; transitioned to `"success"`, `"failed"`,
+  `"snoozed"`, or `"skipped"` when it finishes.
 
   `"skipped"` happens when a job's previous run is still in flight at
   the next schedule tick (skip-if-overlapping).
+
+  `"snoozed"` is a non-fatal attempt — a transient error (DNS,
+  TCP, 5xx, rate-limit) hit while attempts remain. The Oban worker
+  will retry per its backoff schedule; the dashboard does not treat
+  snoozed runs as failures.
   """
   use Ecto.Schema
   import Ecto.Changeset
@@ -16,7 +21,7 @@ defmodule Fae.Backups.Run do
   @foreign_key_type Ecto.UUID
   @timestamps_opts [type: :utc_datetime, updated_at: false]
 
-  @statuses ~w(running success failed skipped)
+  @statuses ~w(running success failed skipped snoozed)
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t() | nil,

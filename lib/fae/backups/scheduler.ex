@@ -57,6 +57,20 @@ defmodule Fae.Backups.Scheduler do
   @spec hydrate() :: :ok
   def hydrate, do: GenServer.call(__MODULE__, :hydrate)
 
+  @doc """
+  Finds RunWorker Oban entries that are overdue (state in
+  `scheduled` / `available`, `scheduled_at` in the past) and
+  reschedules them with a 60-second-per-job stagger so they don't
+  all fire at once. Invoked by `Fae.Backups.SuspendWatcher` on
+  detected resume from suspend.
+
+  Executing jobs are left alone — Oban won't double-dispatch them
+  and the per-job `Fae.Backups.RunRegistry` would catch any race
+  with a new insertion.
+  """
+  @spec restage_overdue() :: :ok
+  def restage_overdue, do: GenServer.call(__MODULE__, :restage_overdue)
+
   @impl true
   def init(_opts) do
     :ok = Fae.Backups.subscribe_jobs()
@@ -81,6 +95,12 @@ defmodule Fae.Backups.Scheduler do
       do_reconcile(job.id)
     end
 
+    {:reply, :ok, state}
+  end
+
+  @impl true
+  def handle_call(:restage_overdue, _from, state) do
+    do_restage_overdue()
     {:reply, :ok, state}
   end
 
@@ -128,5 +148,51 @@ defmodule Fae.Backups.Scheduler do
     %{"job_id" => job.id, "kind" => "scheduled"}
     |> RunWorker.new(scheduled_at: next)
     |> Oban.insert()
+  end
+
+  @stagger_seconds 60
+
+  # Exposed so tests can drive the restage in their own process (Oban
+  # testing mode is process-local). Production callers go through
+  # `restage_overdue/0`, which routes via the GenServer.
+  @doc false
+  def do_restage_overdue do
+    worker_name = inspect(RunWorker)
+    now = Fae.Clock.now()
+
+    overdue =
+      Fae.Repo.all(
+        from j in Oban.Job,
+          where: j.worker == ^worker_name,
+          where: j.state in ["available", "scheduled"],
+          where: j.scheduled_at < ^now,
+          order_by: [asc: j.scheduled_at]
+      )
+
+    if overdue != [] do
+      Logger.info("Restaging #{length(overdue)} overdue backup job(s)")
+
+      ids = Enum.map(overdue, & &1.id)
+      {:ok, _} = Oban.cancel_all_jobs(from j in Oban.Job, where: j.id in ^ids)
+
+      overdue
+      |> Enum.with_index(1)
+      |> Enum.each(fn {oban_job, idx} ->
+        offset_seconds = idx * @stagger_seconds
+        new_at = DateTime.add(now, offset_seconds, :second)
+
+        case oban_job.args
+             |> RunWorker.new(scheduled_at: new_at)
+             |> Oban.insert() do
+          {:ok, _} ->
+            :ok
+
+          {:error, reason} ->
+            Logger.warning("Restage insert failed: #{inspect(reason)}")
+        end
+      end)
+    end
+
+    :ok
   end
 end

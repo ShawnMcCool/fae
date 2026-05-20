@@ -192,7 +192,7 @@ defmodule Fae.Backups.RunPipelineTest do
       |> expect(:put, fn _dest, _key, _path -> {:error, :boom} end)
 
       Fae.Backups.subscribe_runs()
-      assert {:error, :boom} = RunPipeline.run(job)
+      assert {:failed, :boom} = RunPipeline.run(job)
 
       assert_received {:run_started, _}
       assert_received {:run_finished, _id, :failed, :boom}
@@ -206,11 +206,91 @@ defmodule Fae.Backups.RunPipelineTest do
       job = create_job(destination, %{source_path: "/nonexistent/path/here"})
 
       Fae.Backups.subscribe_runs()
-      assert {:error, _} = RunPipeline.run(job)
+      assert {:failed, _} = RunPipeline.run(job)
 
       [run] = Runs.list_recent(job.id, 10)
       assert run.status == "failed"
       assert run.error_message =~ "enoent"
+    end
+  end
+
+  describe "transient error handling" do
+    test "snoozes when last_attempt? is false and error is transient", %{
+      destination: destination
+    } do
+      job = create_job(destination)
+      transport_error = %Finch.TransportError{reason: :nxdomain}
+
+      DriverMock
+      |> expect(:put, fn _dest, _key, _path -> {:error, transport_error} end)
+
+      Fae.Backups.subscribe_runs()
+      assert {:snoozed, ^transport_error} = RunPipeline.run(job, last_attempt?: false)
+
+      assert_received {:run_started, _}
+      assert_received {:run_finished, _id, :snoozed, ^transport_error}
+
+      [run] = Runs.list_recent(job.id, 10)
+      assert run.status == "snoozed"
+      assert run.error_message =~ "nxdomain"
+    end
+
+    test "fails when last_attempt? is true even if error is transient", %{
+      destination: destination
+    } do
+      job = create_job(destination)
+      transport_error = %Finch.TransportError{reason: :nxdomain}
+
+      DriverMock
+      |> expect(:put, fn _dest, _key, _path -> {:error, transport_error} end)
+
+      Fae.Backups.subscribe_runs()
+      assert {:failed, ^transport_error} = RunPipeline.run(job, last_attempt?: true)
+
+      assert_received {:run_finished, _id, :failed, ^transport_error}
+
+      [run] = Runs.list_recent(job.id, 10)
+      assert run.status == "failed"
+    end
+
+    test "fails (no snooze) when error is permanent even with attempts remaining", %{
+      destination: destination
+    } do
+      job = create_job(destination)
+      permanent_error = {:s3_error, 403, "Forbidden"}
+
+      DriverMock
+      |> expect(:put, fn _dest, _key, _path -> {:error, permanent_error} end)
+
+      assert {:failed, ^permanent_error} = RunPipeline.run(job, last_attempt?: false)
+
+      [run] = Runs.list_recent(job.id, 10)
+      assert run.status == "failed"
+    end
+  end
+
+  describe "classify_error/1" do
+    test "transport, http, timeout, and 5xx/429 are transient" do
+      assert RunPipeline.classify_error(%Finch.TransportError{reason: :nxdomain}) == :transient
+      assert RunPipeline.classify_error(%Mint.TransportError{reason: :closed}) == :transient
+
+      assert RunPipeline.classify_error(%Finch.HTTPError{reason: :closed}) == :transient
+
+      assert RunPipeline.classify_error(:timeout) == :transient
+      assert RunPipeline.classify_error({:timeout, :upload}) == :transient
+      assert RunPipeline.classify_error({:network, :econnrefused}) == :transient
+      assert RunPipeline.classify_error({:s3_error, 500, ""}) == :transient
+      assert RunPipeline.classify_error({:s3_error, 503, ""}) == :transient
+      assert RunPipeline.classify_error({:s3_error, 429, ""}) == :transient
+    end
+
+    test "auth/missing/4xx and unknown atoms are permanent" do
+      assert RunPipeline.classify_error({:s3_error, 403, ""}) == :permanent
+      assert RunPipeline.classify_error({:s3_error, 404, ""}) == :permanent
+      assert RunPipeline.classify_error({:s3_error, 400, ""}) == :permanent
+      assert RunPipeline.classify_error(:enoent) == :permanent
+      assert RunPipeline.classify_error(:unauthorized) == :permanent
+      assert RunPipeline.classify_error(:boom) == :permanent
     end
   end
 end

@@ -105,4 +105,65 @@ defmodule Fae.Backups.RunWorkerTest do
                perform_job(RunWorker, %{"job_id" => job.id, "kind" => "manual"})
     end
   end
+
+  describe "retry behaviour" do
+    test "transient error on non-final attempt returns {:error, _} and snoozes the row", %{
+      job: job
+    } do
+      DriverMock
+      |> expect(:put, fn _dest, _key, _path ->
+        {:error, %Finch.TransportError{reason: :nxdomain}}
+      end)
+
+      assert {:error, {:transient, %Finch.TransportError{reason: :nxdomain}}} =
+               perform_job(RunWorker, %{"job_id" => job.id, "kind" => "manual"},
+                 attempt: 1,
+                 max_attempts: 5
+               )
+
+      [run] = Runs.list_recent(job.id, 10)
+      assert run.status == "snoozed"
+      assert run.error_message =~ "nxdomain"
+    end
+
+    test "transient error on final attempt cancels with failed row", %{job: job} do
+      DriverMock
+      |> expect(:put, fn _dest, _key, _path ->
+        {:error, %Finch.TransportError{reason: :nxdomain}}
+      end)
+
+      assert {:cancel, %Finch.TransportError{reason: :nxdomain}} =
+               perform_job(RunWorker, %{"job_id" => job.id, "kind" => "manual"},
+                 attempt: 5,
+                 max_attempts: 5
+               )
+
+      [run] = Runs.list_recent(job.id, 10)
+      assert run.status == "failed"
+    end
+
+    test "permanent error cancels immediately with failed row even mid-attempt-budget", %{
+      job: job
+    } do
+      DriverMock
+      |> expect(:put, fn _dest, _key, _path -> {:error, {:s3_error, 403, "Forbidden"}} end)
+
+      assert {:cancel, {:s3_error, 403, "Forbidden"}} =
+               perform_job(RunWorker, %{"job_id" => job.id, "kind" => "manual"},
+                 attempt: 1,
+                 max_attempts: 5
+               )
+
+      [run] = Runs.list_recent(job.id, 10)
+      assert run.status == "failed"
+    end
+
+    test "backoff schedule grows then plateaus" do
+      assert RunWorker.backoff(%Oban.Job{attempt: 1}) == 30
+      assert RunWorker.backoff(%Oban.Job{attempt: 2}) == 120
+      assert RunWorker.backoff(%Oban.Job{attempt: 3}) == 600
+      assert RunWorker.backoff(%Oban.Job{attempt: 4}) == 1800
+      assert RunWorker.backoff(%Oban.Job{attempt: 5}) == 1800
+    end
+  end
 end

@@ -5,16 +5,37 @@ defmodule Fae.Backups.RunPipeline do
       start run row → snapshot source → package → upload → record
       success → retention sweep → cleanup
 
-  Failures at any step transition the run row to `"failed"` with the
-  error captured in `error_message`. Cleanups always run (in
-  `try/after`) regardless of success or failure. Retention sweep is
-  best-effort — failures are logged but do not flip a successful run
-  to failed.
+  Cleanups always run (in `try/after`) regardless of success or
+  failure. Retention sweep is best-effort — failures are logged but
+  do not flip a successful run to failed.
 
-  PubSub broadcasts on `Fae.Topics.backups_runs/0`:
+  ## Outcome classification
+
+  Errors are classified as **transient** (DNS, TCP, TLS, timeout,
+  HTTP 5xx, HTTP 429) or **permanent** (auth, missing source, 4xx,
+  unknown atom). The pipeline writes the run row according to:
+
+    * success                                  → `"success"`
+    * permanent error                          → `"failed"`
+    * transient error, more attempts remaining → `"snoozed"`
+    * transient error, final attempt           → `"failed"`
+
+  The caller controls whether this is the final attempt via the
+  `:last_attempt?` option (default `true`). The Oban worker passes
+  `false` until `attempt == max_attempts`.
+
+  ## Return values
+
+    * `{:ok, run}`           — success
+    * `{:snoozed, reason}`   — transient, will be retried by caller
+    * `{:failed, reason}`    — terminal, do not retry
+
+  ## PubSub
+
+  Broadcasts on `Fae.Topics.backups_runs/0`:
 
     * `{:run_started, run_id}`
-    * `{:run_finished, run_id, :success | :failed, info_or_reason}`
+    * `{:run_finished, run_id, :success | :failed | :snoozed, info_or_reason}`
   """
 
   require Logger
@@ -22,21 +43,42 @@ defmodule Fae.Backups.RunPipeline do
   alias Fae.Backups.{Drivers, Job, Jobs, Packager, Retention, Runs, Sources}
   alias Fae.Topics
 
+  @type result ::
+          {:ok, Fae.Backups.Run.t()}
+          | {:snoozed, term()}
+          | {:failed, term()}
+
   @doc """
-  Runs the job and returns `{:ok, run}` or `{:error, reason}`. The
-  caller (Oban worker / "Run now" button) typically discards the
-  return value and inspects the LiveView.
+  Runs the job. See moduledoc for return values and the
+  `:last_attempt?` option (default `true`).
   """
-  @spec run(Job.t()) :: {:ok, Fae.Backups.Run.t()} | {:error, term()}
-  def run(%Job{} = job) do
+  @spec run(Job.t(), keyword()) :: result()
+  def run(%Job{} = job, opts \\ []) do
+    last_attempt? = Keyword.get(opts, :last_attempt?, true)
     job = ensure_destination_loaded(job)
     started_at = Fae.Clock.now()
     {:ok, run} = Runs.start(job.id, started_at)
     broadcast({:run_started, run.id})
 
     result = pipeline(job, run)
-    finish(run, result)
+    finish(run, result, last_attempt?)
   end
+
+  @doc """
+  Classifies an error term as `:transient` (worth retrying) or
+  `:permanent` (retrying won't help). Transient: network/transport
+  errors, timeouts, HTTP 5xx, HTTP 429. Permanent: everything else.
+  """
+  @spec classify_error(term()) :: :transient | :permanent
+  def classify_error(%Finch.TransportError{}), do: :transient
+  def classify_error(%Mint.TransportError{}), do: :transient
+  def classify_error(%Finch.HTTPError{}), do: :transient
+  def classify_error(:timeout), do: :transient
+  def classify_error({:timeout, _}), do: :transient
+  def classify_error({:network, _}), do: :transient
+  def classify_error({:s3_error, status, _}) when status >= 500, do: :transient
+  def classify_error({:s3_error, 429, _}), do: :transient
+  def classify_error(_), do: :permanent
 
   defp pipeline(job, run) do
     with {:ok, src_kind, src_path, src_cleanup} <- Sources.snapshot(job) do
@@ -133,7 +175,7 @@ defmodule Fae.Backups.RunPipeline do
   defp trim_segment(nil), do: ""
   defp trim_segment(value), do: value |> to_string() |> String.trim() |> String.trim("/")
 
-  defp finish(run, {:ok, %{object_key: object_key, byte_size: bytes, sha256: sha} = info}) do
+  defp finish(run, {:ok, %{object_key: object_key, byte_size: bytes, sha256: sha} = info}, _last?) do
     {:ok, finished} =
       Runs.finish(run, %{
         finished_at: Fae.Clock.now(),
@@ -147,7 +189,14 @@ defmodule Fae.Backups.RunPipeline do
     {:ok, finished}
   end
 
-  defp finish(run, {:error, reason}) do
+  defp finish(run, {:error, reason}, last_attempt?) do
+    case {classify_error(reason), last_attempt?} do
+      {:transient, false} -> finish_snoozed(run, reason)
+      _ -> finish_failed(run, reason)
+    end
+  end
+
+  defp finish_failed(run, reason) do
     {:ok, finished} =
       Runs.finish(run, %{
         finished_at: Fae.Clock.now(),
@@ -156,7 +205,19 @@ defmodule Fae.Backups.RunPipeline do
       })
 
     broadcast({:run_finished, finished.id, :failed, reason})
-    {:error, reason}
+    {:failed, reason}
+  end
+
+  defp finish_snoozed(run, reason) do
+    {:ok, finished} =
+      Runs.finish(run, %{
+        finished_at: Fae.Clock.now(),
+        status: "snoozed",
+        error_message: format_error(reason)
+      })
+
+    broadcast({:run_finished, finished.id, :snoozed, reason})
+    {:snoozed, reason}
   end
 
   defp format_error(reason) do

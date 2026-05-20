@@ -101,4 +101,81 @@ defmodule Fae.Backups.SchedulerTest do
       refute_enqueued(worker: RunWorker, args: %{"job_id" => job.id})
     end)
   end
+
+  describe "restage_overdue/0" do
+    test "spaces overdue jobs 60s apart and leaves future-scheduled jobs alone" do
+      with_manual_oban(fn ->
+        dest = create_destination!()
+        {:ok, job_a} = Jobs.create(job_attrs(dest))
+        {:ok, job_b} = Jobs.create(job_attrs(dest))
+        {:ok, job_future} = Jobs.create(job_attrs(dest))
+
+        now = Fae.Clock.now()
+        past_a = DateTime.add(now, -3600, :second)
+        past_b = DateTime.add(now, -1800, :second)
+        future = DateTime.add(now, 3600, :second)
+
+        {:ok, _} =
+          %{"job_id" => job_a.id, "kind" => "scheduled"}
+          |> RunWorker.new(scheduled_at: past_a)
+          |> Oban.insert()
+
+        {:ok, _} =
+          %{"job_id" => job_b.id, "kind" => "scheduled"}
+          |> RunWorker.new(scheduled_at: past_b)
+          |> Oban.insert()
+
+        {:ok, _} =
+          %{"job_id" => job_future.id, "kind" => "scheduled"}
+          |> RunWorker.new(scheduled_at: future)
+          |> Oban.insert()
+
+        before_call = Fae.Clock.now()
+        :ok = Scheduler.do_restage_overdue()
+
+        restaged =
+          all_enqueued(worker: RunWorker)
+          |> Enum.filter(fn j ->
+            j.args["job_id"] in [job_a.id, job_b.id]
+          end)
+          |> Enum.sort_by(& &1.scheduled_at, DateTime)
+
+        assert length(restaged) == 2
+        [first, second] = restaged
+
+        assert DateTime.diff(first.scheduled_at, before_call, :second) >= 60
+        assert DateTime.diff(first.scheduled_at, before_call, :second) <= 75
+        assert DateTime.diff(second.scheduled_at, first.scheduled_at, :second) == 60
+
+        # Future-scheduled untouched
+        [untouched] =
+          all_enqueued(worker: RunWorker)
+          |> Enum.filter(fn j -> j.args["job_id"] == job_future.id end)
+
+        assert DateTime.compare(untouched.scheduled_at, future) == :eq
+      end)
+    end
+
+    test "is a no-op when nothing is overdue" do
+      with_manual_oban(fn ->
+        dest = create_destination!()
+        {:ok, job} = Jobs.create(job_attrs(dest))
+
+        future = DateTime.add(Fae.Clock.now(), 3600, :second)
+
+        {:ok, _} =
+          %{"job_id" => job.id, "kind" => "scheduled"}
+          |> RunWorker.new(scheduled_at: future)
+          |> Oban.insert()
+
+        :ok = Scheduler.do_restage_overdue()
+
+        [enqueued] =
+          all_enqueued(worker: RunWorker)
+          |> Enum.filter(fn j -> j.args["job_id"] == job.id end)
+
+        assert DateTime.compare(enqueued.scheduled_at, future) == :eq
+      end)
+    end
+  end
 end

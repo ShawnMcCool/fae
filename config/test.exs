@@ -19,6 +19,11 @@ config :fae, Fae.Backups.Scheduler, enabled: false
 # start one manually with a stub notify_runner.
 config :fae, Fae.Backups.Notifier, enabled: false
 
+# Same for the SuspendWatcher — its periodic ticks would compete with
+# the per-test sandbox. Tests that exercise it start one manually with
+# an injected on_resume callback.
+config :fae, Fae.Backups.SuspendWatcher, enabled: false
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used

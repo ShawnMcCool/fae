@@ -18,7 +18,8 @@ defmodule Fae.Backups.Supervisor do
     children = [
       Fae.Backups.RunRegistry,
       Fae.Backups.Scheduler,
-      Fae.Backups.Notifier
+      Fae.Backups.Notifier,
+      Fae.Backups.SuspendWatcher
     ]
 
     # max_restarts/max_seconds explicit per OTP discipline.

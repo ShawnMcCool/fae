@@ -199,6 +199,7 @@ defmodule FaeWeb.DashboardView do
   def status_class("running"), do: "badge-info"
   def status_class("failed"), do: "badge-error"
   def status_class("skipped"), do: "badge-warning"
+  def status_class("snoozed"), do: "badge-warning"
   def status_class(_), do: "badge-ghost"
 
   @spec schedule_summary(Job.t()) :: String.t()
