@@ -49,11 +49,11 @@ defmodule Fae.Storage.Drivers.Driver do
   @doc """
   Lists a single level of the keyspace under `prefix` using
   `delimiter=/`: the immediate sub-folders (`prefixes`, from S3
-  CommonPrefixes) and the files at this level (`keys`). Powers the
-  destination folder picker.
+  CommonPrefixes) and the files at this level (`files`, with size and
+  last-modified). Powers the path browser.
   """
   @callback list_prefixes(Destination.t(), prefix :: String.t()) ::
-              {:ok, %{prefixes: [String.t()], keys: [String.t()]}} | {:error, term()}
+              {:ok, %{prefixes: [String.t()], files: [object()]}} | {:error, term()}
 
   @callback delete(Destination.t(), key :: String.t()) ::
               :ok | {:error, term()}

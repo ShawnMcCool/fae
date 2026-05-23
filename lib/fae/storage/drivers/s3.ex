@@ -271,7 +271,7 @@ defmodule Fae.Storage.Drivers.S3 do
     list_prefixes_paginated(dest, prefix, nil, [], [])
   end
 
-  defp list_prefixes_paginated(dest, prefix, continuation, prefixes, keys) do
+  defp list_prefixes_paginated(dest, prefix, continuation, prefixes, files) do
     base = "#{bucket_url(dest)}/"
 
     params =
@@ -283,14 +283,14 @@ defmodule Fae.Storage.Drivers.S3 do
 
     case Req.get(url, headers: signed) do
       {:ok, %Req.Response{status: 200, body: body}} ->
-        {page_prefixes, page_keys, next_token} = parse_prefixes(body)
+        {page_prefixes, page_files, next_token} = parse_prefixes(body)
         prefixes = prefixes ++ page_prefixes
-        keys = keys ++ page_keys
+        files = files ++ page_files
 
         if next_token do
-          list_prefixes_paginated(dest, prefix, next_token, prefixes, keys)
+          list_prefixes_paginated(dest, prefix, next_token, prefixes, files)
         else
-          {:ok, %{prefixes: prefixes, keys: keys}}
+          {:ok, %{prefixes: prefixes, files: files}}
         end
 
       {:ok, %Req.Response{status: status, body: response_body}} ->
@@ -516,7 +516,7 @@ defmodule Fae.Storage.Drivers.S3 do
   end
 
   # One-level (delimiter=/) listing: CommonPrefixes are the sub-folders,
-  # Contents are the files at this level.
+  # Contents are the files at this level (with size + last-modified).
   @doc false
   def parse_prefixes(xml) when is_binary(xml) do
     prefixes =
@@ -524,10 +524,16 @@ defmodule Fae.Storage.Drivers.S3 do
       |> Regex.scan(xml, capture: :all_but_first)
       |> Enum.map(fn [prefix] -> prefix end)
 
-    keys =
-      ~r{<Contents>.*?<Key>(.*?)</Key>.*?</Contents>}s
+    files =
+      ~r{<Contents>(.*?)</Contents>}s
       |> Regex.scan(xml, capture: :all_but_first)
-      |> Enum.map(fn [key] -> key end)
+      |> Enum.map(fn [content] ->
+        %{
+          key: extract(content, "Key"),
+          size: extract(content, "Size") |> String.to_integer(),
+          last_modified: parse_datetime(extract(content, "LastModified"))
+        }
+      end)
 
     next_token =
       case Regex.run(~r{<NextContinuationToken>(.*?)</NextContinuationToken>}s, xml) do
@@ -535,7 +541,7 @@ defmodule Fae.Storage.Drivers.S3 do
         _ -> nil
       end
 
-    {prefixes, keys, next_token}
+    {prefixes, files, next_token}
   end
 
   # S3 ListObjectsV2 XML parsing. The output schema is stable; using

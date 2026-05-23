@@ -110,11 +110,11 @@ defmodule Fae.Storage.Drivers.S3IntegrationTest do
     {:ok, _} = S3.put_stream(dest, "lp/a/x.txt", path, [])
     {:ok, _} = S3.put_stream(dest, "lp/a/b/y.txt", path, [])
 
-    {:ok, %{prefixes: prefixes, keys: keys}} = S3.list_prefixes(dest, "lp/")
+    {:ok, %{prefixes: prefixes, files: files}} = S3.list_prefixes(dest, "lp/")
     assert "lp/a/" in prefixes
-    assert "lp/top.txt" in keys
+    assert Enum.any?(files, &(&1.key == "lp/top.txt"))
     # Nested entries are NOT flattened into this level.
-    refute "lp/a/x.txt" in keys
+    refute Enum.any?(files, &(&1.key == "lp/a/x.txt"))
 
     {:ok, %{prefixes: sub_prefixes}} = S3.list_prefixes(dest, "lp/a/")
     assert "lp/a/b/" in sub_prefixes

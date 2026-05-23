@@ -124,6 +124,7 @@ defmodule Fae.Storage.DriversTest do
       <IsTruncated>false</IsTruncated>
       <Contents>
         <Key>Family/readme.txt</Key>
+        <LastModified>2026-05-16T03:00:01.000Z</LastModified>
         <Size>3</Size>
       </Contents>
       <CommonPrefixes><Prefix>Family/Pictures Videos/</Prefix></CommonPrefixes>
@@ -131,10 +132,10 @@ defmodule Fae.Storage.DriversTest do
     </ListBucketResult>
     """
 
-    test "extracts common prefixes (folders) and keys (files) at one level" do
-      {prefixes, keys, next_token} = S3.parse_prefixes(@delimited_xml)
+    test "extracts common prefixes (folders) and files (with metadata) at one level" do
+      {prefixes, files, next_token} = S3.parse_prefixes(@delimited_xml)
       assert prefixes == ["Family/Pictures Videos/", "Family/Documents/"]
-      assert keys == ["Family/readme.txt"]
+      assert [%{key: "Family/readme.txt", size: 3, last_modified: %DateTime{}}] = files
       assert next_token == nil
     end
 
