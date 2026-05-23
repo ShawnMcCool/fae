@@ -30,9 +30,14 @@ defmodule FaeWeb.ArchiveLive.Show do
   end
 
   @impl true
-  def handle_event("retry_failed", _params, socket) do
-    _ = Archive.retry_failed(socket.assigns.run.id)
+  def handle_event("sync", _params, socket) do
+    _ = Archive.sync(socket.assigns.run.id)
     {:noreply, refresh(socket)}
+  end
+
+  def handle_event("delete", _params, socket) do
+    {:ok, _} = Runs.delete(socket.assigns.run)
+    {:noreply, push_navigate(socket, to: ~p"/archive")}
   end
 
   @impl true
@@ -73,7 +78,9 @@ defmodule FaeWeb.ArchiveLive.Show do
      snapshot.uploaded_bytes, snapshot.total_bytes}
   end
 
-  defp run_title(run), do: if(run.label == "", do: "Archive", else: run.label)
+  defp run_title(%{name: name}) when is_binary(name) and name != "", do: name
+  defp run_title(%{label: label}) when is_binary(label) and label != "", do: label
+  defp run_title(_run), do: "Archive"
 
   @impl true
   def render(assigns) do
@@ -100,13 +107,14 @@ defmodule FaeWeb.ArchiveLive.Show do
           </div>
           <div class="flex gap-2">
             <.link navigate={~p"/archive"} class="btn btn-sm btn-ghost">Back</.link>
+            <button type="button" phx-click="sync" class="btn btn-sm btn-primary">Sync now</button>
             <button
-              :if={@run.status == "partial"}
               type="button"
-              phx-click="retry_failed"
-              class="btn btn-sm btn-warning btn-outline"
+              phx-click="delete"
+              data-confirm="Delete this archive? (Objects already in the bucket are not removed.)"
+              class="btn btn-sm btn-error btn-outline"
             >
-              Retry failed
+              Delete
             </button>
           </div>
         </div>
@@ -120,8 +128,8 @@ defmodule FaeWeb.ArchiveLive.Show do
           </dd>
           <dt class="opacity-60">Destination</dt>
           <dd>{if @run.destination, do: @run.destination.name, else: "—"}</dd>
-          <dt class="opacity-60">Label</dt>
-          <dd>{if @run.label == "", do: "(none)", else: @run.label}</dd>
+          <dt class="opacity-60">Remote folder</dt>
+          <dd class="font-mono">{if @run.label == "", do: "(prefix root)", else: @run.label}</dd>
         </dl>
 
         <div class="space-y-1">

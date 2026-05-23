@@ -36,7 +36,9 @@ defmodule Fae.Archive.ArchiveWorkerTest do
         secret_access_key: "s"
       })
 
-    {:ok, run} = Runs.create(%{source_path: tmp_dir, label: "Pics", destination_id: dest.id})
+    {:ok, run} =
+      Runs.create(%{name: "Cam", source_path: tmp_dir, label: "Pics", destination_id: dest.id})
+
     {:ok, run: run, dest: dest, source: tmp_dir}
   end
 
@@ -133,6 +135,7 @@ defmodule Fae.Archive.ArchiveWorkerTest do
 
     assert {:ok, run} =
              Fae.Archive.start_archive(%{
+               name: "Cam",
                source_path: source,
                label: "Pics",
                destination_id: dest.id
@@ -141,17 +144,51 @@ defmodule Fae.Archive.ArchiveWorkerTest do
     assert Runs.get(run.id).status == "completed"
   end
 
-  test "retry_failed re-runs failed items to success", %{run: run} do
+  test "sync re-runs failed items to success", %{run: run} do
     stub(DriverMock, :put_stream, fn _dest, _key, _path, _opts -> {:error, :down} end)
     perform_job(ArchiveWorker, %{"run_id" => run.id})
     assert Runs.get(run.id).status == "partial"
 
     stub(DriverMock, :put_stream, ok_upload())
-    assert {:ok, _job} = Fae.Archive.retry_failed(run.id)
+    assert {:ok, _job} = Fae.Archive.sync(run.id)
 
     run = Runs.get(run.id)
     assert run.status == "completed"
     assert run.failed_files == 0
+    assert Enum.all?(Items.list_for_run(run.id), &(&1.status == "uploaded"))
+  end
+
+  test "sync after adding a file uploads only the new file (manual mirror)", %{
+    run: run,
+    source: source
+  } do
+    parent = self()
+
+    stub(DriverMock, :put_stream, fn _dest, key, path, _opts ->
+      send(parent, {:uploaded, key})
+      {:ok, %{byte_size: File.stat!(path).size, sha256: "s", etag: "e"}}
+    end)
+
+    # First sync uploads the three setup files.
+    perform_job(ArchiveWorker, %{"run_id" => run.id})
+    assert_receive {:uploaded, "Family/Pics/a.jpg"}
+    assert_receive {:uploaded, "Family/Pics/b.jpg"}
+    assert_receive {:uploaded, "Family/Pics/sub/c.jpg"}
+
+    # Drop a new file in, then Sync now.
+    new_path = Path.join(source, "2024/new.jpg")
+    File.mkdir_p!(Path.dirname(new_path))
+    File.write!(new_path, "new!")
+    assert {:ok, _job} = Fae.Archive.sync(run.id)
+
+    # Only the new file is uploaded; the originals are skipped.
+    assert_receive {:uploaded, "Family/Pics/2024/new.jpg"}
+    refute_received {:uploaded, "Family/Pics/a.jpg"}
+    refute_received {:uploaded, "Family/Pics/b.jpg"}
+
+    run = Runs.get(run.id)
+    assert run.status == "completed"
+    assert run.total_files == 4
     assert Enum.all?(Items.list_for_run(run.id), &(&1.status == "uploaded"))
   end
 end

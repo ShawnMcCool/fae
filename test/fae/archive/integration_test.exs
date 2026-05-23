@@ -45,7 +45,12 @@ defmodule Fae.Archive.IntegrationTest do
     File.write!(Path.join(tmp_dir, "2004/big.bin"), big)
 
     {:ok, run} =
-      Runs.create(%{source_path: tmp_dir, label: "Pictures Videos", destination_id: dest.id})
+      Runs.create(%{
+        name: "Pictures Videos",
+        source_path: tmp_dir,
+        label: "Pictures Videos",
+        destination_id: dest.id
+      })
 
     {:ok, run: run, dest: dest, big_sha: Base.encode16(:crypto.hash(:sha256, big), case: :lower)}
   end

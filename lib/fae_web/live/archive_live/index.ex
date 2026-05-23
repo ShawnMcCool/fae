@@ -1,8 +1,8 @@
 defmodule FaeWeb.ArchiveLive.Index do
   @moduledoc """
-  Lists archive runs with status and tally, plus a "New archive" action
-  and a per-row retry for partial runs. Subscribes to `archive:runs` for
-  real-time status updates.
+  Lists archives with status and tally, plus a "New archive" action and
+  per-row Sync now / Delete. Subscribes to `archive:runs` for real-time
+  status updates.
   """
   use FaeWeb, :live_view
 
@@ -21,9 +21,20 @@ defmodule FaeWeb.ArchiveLive.Index do
   end
 
   @impl true
-  def handle_event("retry_failed", %{"id" => id}, socket) do
-    _ = Archive.retry_failed(id)
+  def handle_event("sync", %{"id" => id}, socket) do
+    _ = Archive.sync(id)
     {:noreply, load_runs(socket)}
+  end
+
+  def handle_event("delete", %{"id" => id}, socket) do
+    case Runs.get(id) do
+      nil ->
+        {:noreply, socket}
+
+      run ->
+        {:ok, _} = Runs.delete(run)
+        {:noreply, load_runs(socket)}
+    end
   end
 
   @impl true
@@ -32,6 +43,11 @@ defmodule FaeWeb.ArchiveLive.Index do
   def handle_info(_message, socket), do: {:noreply, socket}
 
   defp load_runs(socket), do: assign(socket, :runs, Runs.list())
+
+  @doc false
+  def display_name(%{name: name}) when is_binary(name) and name != "", do: name
+  def display_name(%{label: label}) when is_binary(label) and label != "", do: label
+  def display_name(_run), do: "(unnamed)"
 
   @impl true
   def render(assigns) do
@@ -46,19 +62,19 @@ defmodule FaeWeb.ArchiveLive.Index do
         <%= if @runs == [] do %>
           <p class="opacity-75">
             No archives yet. <.link navigate={~p"/archive/new"} class="link">Start one</.link>
-            to bulk-upload a folder to object storage.
+            to mirror a folder up to object storage.
           </p>
         <% else %>
           <div class="overflow-x-auto">
             <table class="table">
               <thead>
                 <tr>
-                  <th>Label</th>
+                  <th>Name</th>
                   <th>Source</th>
                   <th>Destination</th>
+                  <th>Remote folder</th>
                   <th>Status</th>
                   <th>Files</th>
-                  <th>Size</th>
                   <th>Started</th>
                   <th class="text-right">Actions</th>
                 </tr>
@@ -66,34 +82,42 @@ defmodule FaeWeb.ArchiveLive.Index do
               <tbody>
                 <tr :for={run <- @runs} id={"run-#{run.id}"}>
                   <td>
-                    <.link navigate={~p"/archive/#{run.id}"} class="link">
-                      {if run.label == "", do: "(no label)", else: run.label}
-                    </.link>
+                    <.link navigate={~p"/archive/#{run.id}"} class="link">{display_name(run)}</.link>
                   </td>
                   <td class="font-mono text-xs opacity-75">{run.source_path}</td>
                   <td>{if run.destination, do: run.destination.name, else: "—"}</td>
+                  <td class="font-mono text-xs opacity-75">
+                    {if run.label == "", do: "(prefix root)", else: run.label}
+                  </td>
                   <td>
                     <span class={["badge badge-sm", View.status_badge_class(run.status)]}>
                       {run.status}
                     </span>
                   </td>
                   <td class="text-sm">{run.uploaded_files}/{run.total_files}</td>
-                  <td class="text-sm">{View.human_bytes(run.total_bytes)}</td>
                   <td class="text-sm">{format_dt(run.started_at)}</td>
                   <td class="whitespace-nowrap">
                     <div class="flex justify-end gap-1">
                       <button
-                        :if={run.status == "partial"}
                         type="button"
-                        phx-click="retry_failed"
+                        phx-click="sync"
                         phx-value-id={run.id}
-                        class="btn btn-xs btn-warning btn-outline"
+                        class="btn btn-xs btn-primary"
                       >
-                        Retry failed
+                        Sync now
                       </button>
                       <.link navigate={~p"/archive/#{run.id}"} class="btn btn-xs btn-ghost">
                         View
                       </.link>
+                      <button
+                        type="button"
+                        phx-click="delete"
+                        phx-value-id={run.id}
+                        data-confirm={"Delete '#{display_name(run)}'? (Objects already in the bucket are not removed.)"}
+                        class="btn btn-xs btn-error btn-outline"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </td>
                 </tr>

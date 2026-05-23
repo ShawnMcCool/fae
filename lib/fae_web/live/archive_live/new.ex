@@ -1,8 +1,9 @@
 defmodule FaeWeb.ArchiveLive.New do
   @moduledoc """
-  Form to start a new archive: pick a source directory, a free-text
-  label, and a destination. On success the run is enqueued and the user
-  is sent to its detail page to watch progress.
+  Form to create a new archive: a friendly name, a source directory, the
+  remote folder it mirrors into, and a destination. On success the first
+  sync is enqueued and the user is sent to its detail page to watch
+  progress (and Sync now / Delete later).
   """
   use FaeWeb, :live_view
 
@@ -63,6 +64,19 @@ defmodule FaeWeb.ArchiveLive.New do
         <% else %>
           <.form for={@form} phx-change="validate" phx-submit="save" class="space-y-3">
             <div>
+              <label class="label">Name</label>
+              <.input
+                field={@form[:name]}
+                type="text"
+                placeholder="Camera Backup"
+                class="input input-bordered w-full"
+              />
+              <p class="text-xs opacity-60 mt-1">
+                A friendly name for this archive, shown in the list. Doesn't affect the remote path.
+              </p>
+            </div>
+
+            <div>
               <label class="label">Source folder</label>
               <.input
                 field={@form[:source_path]}
@@ -76,15 +90,15 @@ defmodule FaeWeb.ArchiveLive.New do
             </div>
 
             <div>
-              <label class="label">Label (optional)</label>
+              <label class="label">Remote folder (optional)</label>
               <.input
                 field={@form[:label]}
                 type="text"
                 placeholder="Pictures Videos"
-                class="input input-bordered w-full"
+                class="input input-bordered w-full font-mono"
               />
               <p class="text-xs opacity-60 mt-1">
-                A collection name prepended to every object key, after the destination's path prefix. Leave blank to write straight under the prefix.
+                The folder inside the bucket the source mirrors into, after the destination's path prefix. May contain slashes (e.g. <code>Family Backups (Important)/Pictures Videos</code>). Leave blank to write straight under the prefix.
               </p>
             </div>
 

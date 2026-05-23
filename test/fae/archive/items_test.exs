@@ -20,7 +20,7 @@ defmodule Fae.Archive.ItemsTest do
         secret_access_key: "s"
       })
 
-    {:ok, run} = Runs.create(%{source_path: tmp_dir, destination_id: dest.id})
+    {:ok, run} = Runs.create(%{name: "T", source_path: tmp_dir, destination_id: dest.id})
     {:ok, run: run}
   end
 

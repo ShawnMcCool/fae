@@ -35,6 +35,14 @@ defmodule Fae.Archive.Runs do
   @spec change(Run.t(), map()) :: Ecto.Changeset.t()
   def change(run \\ %Run{}, attrs \\ %{}), do: Run.create_changeset(run, attrs)
 
+  @spec delete(Run.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
+  def delete(%Run{} = run) do
+    with {:ok, deleted} <- Repo.delete(run) do
+      broadcast_changed(deleted.id)
+      {:ok, deleted}
+    end
+  end
+
   @spec create(map()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
   def create(attrs) do
     with {:ok, run} <- %Run{} |> Run.create_changeset(attrs) |> Repo.insert() do

@@ -27,7 +27,12 @@ defmodule Fae.Archive.RunsTest do
     :ok = Phoenix.PubSub.subscribe(Fae.PubSub, Topics.archive_runs())
 
     assert {:ok, run} =
-             Runs.create(%{source_path: source, label: "Pics", destination_id: dest.id})
+             Runs.create(%{
+               name: "Cam",
+               source_path: source,
+               label: "Pics",
+               destination_id: dest.id
+             })
 
     assert run.status == "pending"
     assert_receive {:run_changed, run_id}
@@ -35,7 +40,7 @@ defmodule Fae.Archive.RunsTest do
   end
 
   test "lifecycle: scanning -> uploading -> finalize completed", %{dest: dest, source: source} do
-    {:ok, run} = Runs.create(%{source_path: source, destination_id: dest.id})
+    {:ok, run} = Runs.create(%{name: "T", source_path: source, destination_id: dest.id})
 
     {:ok, run} = Runs.mark_scanning(run)
     assert run.status == "scanning"
@@ -52,7 +57,7 @@ defmodule Fae.Archive.RunsTest do
   end
 
   test "finalize with failures marks the run partial", %{dest: dest, source: source} do
-    {:ok, run} = Runs.create(%{source_path: source, destination_id: dest.id})
+    {:ok, run} = Runs.create(%{name: "T", source_path: source, destination_id: dest.id})
     {:ok, run} = Runs.finalize(run, %{uploaded_files: 8, uploaded_bytes: 800, failed_files: 2})
     assert run.status == "partial"
     assert run.failed_files == 2
@@ -60,7 +65,7 @@ defmodule Fae.Archive.RunsTest do
 
   test "mark_failed records the error and broadcasts finished", %{dest: dest, source: source} do
     :ok = Phoenix.PubSub.subscribe(Fae.PubSub, Topics.archive_runs())
-    {:ok, run} = Runs.create(%{source_path: source, destination_id: dest.id})
+    {:ok, run} = Runs.create(%{name: "T", source_path: source, destination_id: dest.id})
 
     {:ok, run} = Runs.mark_failed(run, "boom")
     assert run.status == "failed"
@@ -72,11 +77,21 @@ defmodule Fae.Archive.RunsTest do
     dest: dest,
     source: source
   } do
-    {:ok, _a} = Runs.create(%{source_path: source, destination_id: dest.id})
-    {:ok, _b} = Runs.create(%{source_path: source, destination_id: dest.id})
+    {:ok, _a} = Runs.create(%{name: "T", source_path: source, destination_id: dest.id})
+    {:ok, _b} = Runs.create(%{name: "T", source_path: source, destination_id: dest.id})
 
     runs = Runs.list()
     assert length(runs) == 2
     assert %Destination{} = hd(runs).destination
+  end
+
+  test "delete/1 removes the run and broadcasts", %{dest: dest, source: source} do
+    {:ok, run} = Runs.create(%{name: "T", source_path: source, destination_id: dest.id})
+    :ok = Phoenix.PubSub.subscribe(Fae.PubSub, Topics.archive_runs())
+
+    assert {:ok, _deleted} = Runs.delete(run)
+    assert Runs.get(run.id) == nil
+    assert_receive {:run_changed, run_id}
+    assert run_id == run.id
   end
 end

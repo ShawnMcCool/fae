@@ -40,9 +40,15 @@ defmodule Fae.Archive do
     end
   end
 
-  @doc "Resets a run's failed items to pending and re-runs them."
-  @spec retry_failed(Ecto.UUID.t()) :: {:ok, Oban.Job.t()} | {:error, term()}
-  def retry_failed(run_id) do
+  @doc """
+  Re-runs an archive: the worker re-scans the source (picking up files
+  added since the last run) and uploads everything still pending,
+  skipping files already uploaded. Failed items are reset to pending
+  first so transient failures are retried too. This is the "Sync now"
+  action behind a manual drop-folder mirror.
+  """
+  @spec sync(Ecto.UUID.t()) :: {:ok, Oban.Job.t()} | {:error, term()}
+  def sync(run_id) do
     case Runs.get(run_id) do
       nil ->
         {:error, :not_found}

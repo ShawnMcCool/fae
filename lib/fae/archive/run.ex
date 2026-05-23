@@ -21,6 +21,7 @@ defmodule Fae.Archive.Run do
 
   @type t :: %__MODULE__{
           id: Ecto.UUID.t() | nil,
+          name: String.t(),
           source_path: String.t() | nil,
           label: String.t(),
           status: String.t(),
@@ -39,7 +40,10 @@ defmodule Fae.Archive.Run do
         }
 
   schema "archive_runs" do
+    field :name, :string, default: ""
     field :source_path, :string
+    # The remote folder segment of the object key (after the
+    # destination's path_prefix). May contain slashes.
     field :label, :string, default: ""
     field :status, :string, default: "pending"
     field :total_files, :integer, default: 0
@@ -63,10 +67,11 @@ defmodule Fae.Archive.Run do
   """
   def create_changeset(run, attrs) do
     run
-    |> cast(attrs, [:source_path, :label, :destination_id])
-    |> validate_required([:source_path, :destination_id])
+    |> cast(attrs, [:name, :source_path, :label, :destination_id])
+    |> update_change(:name, &String.trim/1)
     |> update_change(:source_path, &String.trim/1)
     |> normalize_label()
+    |> validate_required([:name, :source_path, :destination_id])
     |> validate_source_directory()
     |> assoc_constraint(:destination)
   end
