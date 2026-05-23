@@ -42,7 +42,8 @@ defmodule Fae.MixProject do
   end
 
   # Specifies which paths to compile per environment.
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(:test), do: ["lib", "test/support", "credo_checks"]
+  defp elixirc_paths(:dev), do: ["lib", "credo_checks"]
   defp elixirc_paths(_), do: ["lib"]
 
   # Specifies your project dependencies.
@@ -76,7 +77,8 @@ defmodule Fae.MixProject do
       {:req, "~> 0.5"},
       {:tzdata, "~> 1.1"},
       {:aws_signature, "~> 0.4"},
-      {:mox, "~> 1.1", only: :test}
+      {:mox, "~> 1.1", only: :test},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -99,7 +101,13 @@ defmodule Fae.MixProject do
         "esbuild fae --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: [
+        "compile --warnings-as-errors",
+        "deps.unlock --unused",
+        "format",
+        "credo --only Fae.Credo",
+        "test"
+      ]
     ]
   end
 end
