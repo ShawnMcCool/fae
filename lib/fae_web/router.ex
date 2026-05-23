@@ -20,6 +20,7 @@ defmodule FaeWeb.Router do
     live_session :default, on_mount: [FaeWeb.SidebarScope, FaeWeb.DisplayScope] do
       live "/", DashboardLive
       live "/update", UpdateLive
+      live "/settings", SettingsLive, :index
 
       scope "/backups" do
         live "/", BackupsLive.Index, :index

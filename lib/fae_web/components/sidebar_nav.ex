@@ -33,6 +33,11 @@ defmodule FaeWeb.SidebarNav do
       items: [
         %{path: "/update", label: "Updates", icon: "hero-arrow-down-tray"}
       ]
+    },
+    %{
+      items: [
+        %{path: "/settings", label: "Settings", icon: "hero-cog-6-tooth"}
+      ]
     }
   ]
 
