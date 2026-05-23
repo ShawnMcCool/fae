@@ -140,7 +140,8 @@ defmodule FaeWeb.PathBrowser do
           >
             <span class="truncate">📄 {file.name}</span>
             <span class="opacity-60 text-xs whitespace-nowrap">
-              {format_size(file.size)} · {format_date(file.last_modified)}
+              {format_size(file.size)} ·
+              <.local_datetime value={file.last_modified} tz={@tz} format={:date} />
             </span>
           </div>
           <div
@@ -179,7 +180,4 @@ defmodule FaeWeb.PathBrowser do
     do: "#{Float.round(bytes / 1_048_576, 1)} MiB"
 
   defp format_size(bytes), do: "#{Float.round(bytes / 1_073_741_824, 2)} GiB"
-
-  defp format_date(nil), do: "—"
-  defp format_date(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d")
 end

@@ -146,6 +146,7 @@ defmodule FaeWeb.BackupsLive.Index do
         :if={@browser}
         module={PathBrowser}
         id="path-browser"
+        tz={@timezone}
         source={@browser.source}
         mode={@browser.mode}
         show_files={@browser.show_files}
