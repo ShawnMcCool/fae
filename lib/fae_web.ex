@@ -81,6 +81,8 @@ defmodule FaeWeb do
       import Phoenix.HTML
       # Core UI components
       import FaeWeb.CoreComponents
+      # The enforced chokepoint for all date/time rendering
+      import FaeWeb.TimeDisplay
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

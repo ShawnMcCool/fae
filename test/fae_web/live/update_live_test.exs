@@ -6,6 +6,7 @@ defmodule FaeWeb.UpdateLiveTest do
 
   alias Fae.SelfUpdate.UpdateChecker
   alias Fae.Topics
+  alias FaeWeb.TimeDisplay
   alias FaeWeb.UpdateLive
 
   setup do
@@ -63,12 +64,12 @@ defmodule FaeWeb.UpdateLiveTest do
     test "time_ago/2 buckets sub-minute, minutes, hours, days" do
       now = ~U[2026-05-16 12:00:00Z]
 
-      assert UpdateLive.time_ago(nil, now) == nil
-      assert UpdateLive.time_ago(DateTime.add(now, -2, :second), now) == "just now"
-      assert UpdateLive.time_ago(DateTime.add(now, -30, :second), now) == "30s ago"
-      assert UpdateLive.time_ago(DateTime.add(now, -120, :second), now) == "2m ago"
-      assert UpdateLive.time_ago(DateTime.add(now, -7200, :second), now) == "2h ago"
-      assert UpdateLive.time_ago(DateTime.add(now, -172_800, :second), now) == "2d ago"
+      assert TimeDisplay.time_ago(nil, now) == nil
+      assert TimeDisplay.time_ago(DateTime.add(now, -2, :second), now) == "just now"
+      assert TimeDisplay.time_ago(DateTime.add(now, -30, :second), now) == "30s ago"
+      assert TimeDisplay.time_ago(DateTime.add(now, -120, :second), now) == "2m ago"
+      assert TimeDisplay.time_ago(DateTime.add(now, -7200, :second), now) == "2h ago"
+      assert TimeDisplay.time_ago(DateTime.add(now, -172_800, :second), now) == "2d ago"
     end
 
     test "error_label maps known structured errors to human strings" do

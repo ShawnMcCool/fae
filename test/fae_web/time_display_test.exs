@@ -55,4 +55,38 @@ defmodule FaeWeb.TimeDisplayTest do
       assert TimeDisplay.time_ago(DateTime.add(now, -172_800, :second), now) == "2d ago"
     end
   end
+
+  describe "components" do
+    import Phoenix.LiveViewTest
+
+    test "local_datetime renders the formatted value with an ISO title" do
+      html =
+        render_component(&TimeDisplay.local_datetime/1,
+          value: ~U[2026-07-01 12:00:00Z],
+          tz: "Europe/Amsterdam",
+          format: :datetime
+        )
+
+      assert html =~ "2026-07-01 14:00 CEST"
+      assert html =~ ~s(title="2026-07-01 14:00:00 CEST")
+      assert html =~ "2026-07-01T12:00:00Z"
+    end
+
+    test "local_datetime renders an em dash for nil" do
+      html = render_component(&TimeDisplay.local_datetime/1, value: nil, tz: "UTC")
+      assert html =~ "—"
+    end
+
+    test "relative_time renders the relative label with an absolute title" do
+      html =
+        render_component(&TimeDisplay.relative_time/1,
+          value: ~U[2026-07-01 12:00:00Z],
+          tz: "Europe/Amsterdam",
+          id: "last-checked"
+        )
+
+      assert html =~ ~s(id="last-checked")
+      assert html =~ ~s(title="2026-07-01 14:00:00 CEST")
+    end
+  end
 end

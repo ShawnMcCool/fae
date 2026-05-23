@@ -172,25 +172,6 @@ defmodule FaeWeb.UpdateLive do
   def show_cancel_button?(_), do: false
 
   @doc """
-  Relative-time label like "2m ago" or "just now" for a past timestamp.
-  Returns nil for nil input.
-  """
-  def time_ago(at, now \\ DateTime.utc_now())
-  def time_ago(nil, _now), do: nil
-
-  def time_ago(%DateTime{} = at, %DateTime{} = now) do
-    seconds = DateTime.diff(now, at, :second)
-
-    cond do
-      seconds < 5 -> "just now"
-      seconds < 60 -> "#{seconds}s ago"
-      seconds < 3600 -> "#{div(seconds, 60)}m ago"
-      seconds < 86_400 -> "#{div(seconds, 3600)}h ago"
-      true -> "#{div(seconds, 86_400)}d ago"
-    end
-  end
-
-  @doc """
   Human-readable label for an error reason from the check or apply pipeline.
   Pure: takes a structured error tuple/atom, returns a string.
   """

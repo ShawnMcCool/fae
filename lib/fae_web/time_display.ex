@@ -57,4 +57,39 @@ defmodule FaeWeb.TimeDisplay do
       true -> "#{div(seconds, 86_400)}d ago"
     end
   end
+
+  attr :value, :any, required: true, doc: "a UTC DateTime, or nil"
+  attr :tz, :string, required: true, doc: "IANA timezone name (from @timezone)"
+
+  attr :format, :atom,
+    default: :datetime,
+    values: [:date, :datetime, :datetime_seconds, :time]
+
+  attr :rest, :global
+
+  @doc "Render a UTC datetime in the user's timezone with a fuller tooltip."
+  def local_datetime(assigns) do
+    ~H"""
+    <time datetime={iso(@value)} title={title(@value, @tz)} {@rest}>
+      {format(@value, @tz, @format)}
+    </time>
+    """
+  end
+
+  attr :value, :any, required: true, doc: "a UTC DateTime, or nil"
+  attr :tz, :string, required: true, doc: "IANA timezone name (from @timezone)"
+  attr :rest, :global
+
+  @doc ~S(Render a relative "2m ago" label with the absolute local time as a tooltip.)
+  def relative_time(assigns) do
+    ~H"""
+    <time datetime={iso(@value)} title={title(@value, @tz)} {@rest}>{time_ago(@value)}</time>
+    """
+  end
+
+  defp iso(nil), do: nil
+  defp iso(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+
+  defp title(nil, _tz), do: nil
+  defp title(%DateTime{} = dt, tz), do: format(dt, tz, :datetime_seconds)
 end
