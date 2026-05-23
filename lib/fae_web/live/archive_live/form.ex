@@ -19,11 +19,11 @@ defmodule FaeWeb.ArchiveLive.Form do
   alias Fae.Archive.Run
   alias Fae.Archive.Runs
   alias Fae.Storage.Destinations
-  alias FaeWeb.ArchiveLive.Picker
+  alias FaeWeb.PathBrowser
 
   @impl true
   def mount(params, _session, socket) do
-    socket = assign(socket, destinations: Destinations.list(), picker: nil)
+    socket = assign(socket, destinations: Destinations.list(), browser: nil)
     {:ok, apply_action(socket, socket.assigns.live_action, params)}
   end
 
@@ -72,18 +72,15 @@ defmodule FaeWeb.ArchiveLive.Form do
   # ── Folder pickers ────────────────────────────────────────────────
 
   def handle_event("open_local_picker", _params, socket) do
-    picker = %{
-      kind: :local,
-      field: :source_path,
-      path: local_start(socket),
-      rel: nil,
-      dest: nil,
-      folders: [],
-      loading: true,
-      error: nil
+    browser = %{
+      source: {:local, local_start(socket)},
+      mode: :pick,
+      show_files: false,
+      title: "Choose a source folder",
+      return_to: :source_path
     }
 
-    {:noreply, reload_picker(assign(socket, :picker, picker))}
+    {:noreply, assign(socket, :browser, browser)}
   end
 
   def handle_event("open_remote_picker", _params, socket) do
@@ -92,70 +89,25 @@ defmodule FaeWeb.ArchiveLive.Form do
         {:noreply, put_flash(socket, :error, "Choose a destination first.")}
 
       dest ->
-        picker = %{
-          kind: :remote,
-          field: :label,
-          path: nil,
-          rel: "",
-          dest: dest,
-          folders: [],
-          loading: true,
-          error: nil
+        browser = %{
+          source: {:remote, dest, ""},
+          mode: :pick,
+          show_files: false,
+          title: "Choose a remote folder",
+          return_to: :label
         }
 
-        {:noreply, reload_picker(assign(socket, :picker, picker))}
+        {:noreply, assign(socket, :browser, browser)}
     end
   end
 
-  def handle_event("picker_navigate", %{"name" => name}, socket) do
-    picker =
-      case socket.assigns.picker do
-        %{kind: :local, path: path} = p -> %{p | path: Path.join(path, name)}
-        %{kind: :remote, rel: rel} = p -> %{p | rel: Picker.remote_join(rel, name)}
-      end
-
-    {:noreply, reload_picker(assign(socket, :picker, picker))}
-  end
-
-  def handle_event("picker_up", _params, socket) do
-    picker =
-      case socket.assigns.picker do
-        %{kind: :local, path: path} = p -> %{p | path: Picker.local_parent(path)}
-        %{kind: :remote, rel: rel} = p -> %{p | rel: Picker.remote_parent(rel)}
-      end
-
-    {:noreply, reload_picker(assign(socket, :picker, picker))}
-  end
-
-  def handle_event("picker_select", _params, socket) do
-    picker = socket.assigns.picker
-    value = if picker.kind == :local, do: picker.path, else: picker.rel
-
-    {:noreply, socket |> put_field(picker.field, value) |> assign(:picker, nil)}
-  end
-
-  def handle_event("picker_close", _params, socket) do
-    {:noreply, assign(socket, :picker, nil)}
-  end
-
   @impl true
-  def handle_async(:picker_load, _result, %{assigns: %{picker: nil}} = socket) do
-    {:noreply, socket}
+  def handle_info({:path_browser, :selected, return_to, value}, socket) do
+    {:noreply, socket |> put_field(return_to, value) |> assign(:browser, nil)}
   end
 
-  def handle_async(:picker_load, {:ok, {:ok, %{folders: folders}}}, socket) do
-    {:noreply,
-     assign(socket, :picker, %{socket.assigns.picker | folders: folders, loading: false})}
-  end
-
-  def handle_async(:picker_load, {:ok, {:error, reason}}, socket) do
-    {:noreply,
-     assign(socket, :picker, %{socket.assigns.picker | loading: false, error: inspect(reason)})}
-  end
-
-  def handle_async(:picker_load, {:exit, reason}, socket) do
-    {:noreply,
-     assign(socket, :picker, %{socket.assigns.picker | loading: false, error: inspect(reason)})}
+  def handle_info({:path_browser, :closed}, socket) do
+    {:noreply, assign(socket, :browser, nil)}
   end
 
   # ── Internals ─────────────────────────────────────────────────────
@@ -203,15 +155,6 @@ defmodule FaeWeb.ArchiveLive.Form do
     end
   end
 
-  defp reload_picker(socket) do
-    picker = socket.assigns.picker
-    socket = assign(socket, :picker, %{picker | loading: true, error: nil})
-    start_async(socket, :picker_load, fn -> load_entries(picker) end)
-  end
-
-  defp load_entries(%{kind: :local, path: path}), do: Picker.list_local(path)
-  defp load_entries(%{kind: :remote, dest: dest, rel: rel}), do: Picker.list_remote(dest, rel)
-
   defp current_destination(socket) do
     case socket.assigns.form.params["destination_id"] do
       id when is_binary(id) and id != "" -> Destinations.get(id)
@@ -237,10 +180,6 @@ defmodule FaeWeb.ArchiveLive.Form do
     changeset = %Run{} |> Runs.change(params) |> Map.put(:action, :validate)
     assign(socket, :form, to_form(changeset))
   end
-
-  defp picker_location(%{kind: :local, path: path}), do: path
-  defp picker_location(%{kind: :remote, rel: ""}), do: "(top level)"
-  defp picker_location(%{kind: :remote, rel: rel}), do: rel
 
   @impl true
   def render(assigns) do
@@ -350,50 +289,16 @@ defmodule FaeWeb.ArchiveLive.Form do
         <% end %>
       </section>
 
-      <div :if={@picker} class="modal modal-open">
-        <div class="modal-box max-w-lg">
-          <h3 class="text-lg font-semibold mb-1">
-            {if @picker.kind == :local, do: "Choose a source folder", else: "Choose a remote folder"}
-          </h3>
-          <div class="text-xs opacity-60 font-mono mb-3 break-all">{picker_location(@picker)}</div>
-
-          <div :if={@picker.error} class="alert alert-error text-sm mb-2">{@picker.error}</div>
-
-          <div class="max-h-72 overflow-y-auto border border-base-300 rounded">
-            <button
-              type="button"
-              phx-click="picker_up"
-              class="block w-full text-left px-3 py-1.5 hover:bg-base-300 text-sm"
-            >
-              ../ (up)
-            </button>
-            <div :if={@picker.loading} class="px-3 py-2 text-sm opacity-60">Loading…</div>
-            <button
-              :for={folder <- @picker.folders}
-              type="button"
-              phx-click="picker_navigate"
-              phx-value-name={folder}
-              class="block w-full text-left px-3 py-1.5 hover:bg-base-300 text-sm font-mono"
-            >
-              📁 {folder}
-            </button>
-            <div
-              :if={not @picker.loading and @picker.folders == []}
-              class="px-3 py-2 text-sm opacity-60"
-            >
-              No sub-folders here.
-            </div>
-          </div>
-
-          <div class="flex justify-end gap-2 mt-3">
-            <button type="button" phx-click="picker_close" class="btn btn-ghost">Cancel</button>
-            <button type="button" phx-click="picker_select" class="btn btn-primary">
-              Use this folder
-            </button>
-          </div>
-        </div>
-        <label class="modal-backdrop" phx-click="picker_close">Close</label>
-      </div>
+      <.live_component
+        :if={@browser}
+        module={PathBrowser}
+        id="path-browser"
+        source={@browser.source}
+        mode={@browser.mode}
+        show_files={@browser.show_files}
+        title={@browser.title}
+        return_to={@browser.return_to}
+      />
     </Layouts.app>
     """
   end

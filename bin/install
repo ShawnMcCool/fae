@@ -32,7 +32,12 @@ echo "==> Reloading systemd user units"
 systemctl --user daemon-reload
 
 echo "==> Enabling and (re)starting fae"
-systemctl --user enable --now fae
+# `enable` (not `enable --now`) only creates the symlink; on an already
+# running service `--now` is a no-op and would leave the OLD code loaded.
+# `restart` starts a stopped unit and reloads a running one, so an
+# install always ends with the just-built release actually running.
+systemctl --user enable fae
+systemctl --user restart fae
 
 echo
 echo "Done. Useful commands:"

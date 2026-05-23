@@ -206,7 +206,7 @@ defmodule FaeWeb.ArchiveLiveTest do
     dest: dest
   } do
     stub(DriverMock, :list_prefixes, fn _dest, _prefix ->
-      {:ok, %{prefixes: ["Pictures Videos/"], keys: []}}
+      {:ok, %{prefixes: ["Pictures Videos/"], files: []}}
     end)
 
     {:ok, view, _html} = live(conn, ~p"/archive/new")
