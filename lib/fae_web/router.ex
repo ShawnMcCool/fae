@@ -17,7 +17,7 @@ defmodule FaeWeb.Router do
   scope "/", FaeWeb do
     pipe_through :browser
 
-    live_session :default, on_mount: [FaeWeb.SidebarScope] do
+    live_session :default, on_mount: [FaeWeb.SidebarScope, FaeWeb.DisplayScope] do
       live "/", DashboardLive
       live "/update", UpdateLive
 
