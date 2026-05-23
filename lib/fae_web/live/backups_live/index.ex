@@ -120,7 +120,13 @@ defmodule FaeWeb.BackupsLive.Index do
                     <td>
                       {last_run_cell(assigns, last_run)}
                     </td>
-                    <td class="text-sm">{format_dt(next_fire, job.enabled)}</td>
+                    <td class="text-sm">
+                      <%= if job.enabled do %>
+                        <.local_datetime value={next_fire} tz={@timezone} format={:datetime} />
+                      <% else %>
+                        (disabled)
+                      <% end %>
+                    </td>
                     <td class="text-right">
                       <button
                         :if={job.destination}
@@ -169,7 +175,9 @@ defmodule FaeWeb.BackupsLive.Index do
     ~H"""
     <div class="flex flex-col gap-0.5">
       <span class={["badge badge-sm", status_class(@run.status)]}>{@run.status}</span>
-      <span class="text-xs opacity-75 font-mono">{format_dt(@run.started_at, true)}</span>
+      <span class="text-xs opacity-75 font-mono">
+        <.local_datetime value={@run.started_at} tz={@timezone} format={:datetime} />
+      </span>
       <%= if @run.error_message do %>
         <span class="text-xs text-error truncate max-w-xs" title={@run.error_message}>
           {@run.error_message}
@@ -208,11 +216,4 @@ defmodule FaeWeb.BackupsLive.Index do
   defp day_name(5), do: "Fri"
   defp day_name(6), do: "Sat"
   defp day_name(_), do: "?"
-
-  defp format_dt(_dt, false), do: "(disabled)"
-  defp format_dt(nil, _), do: "—"
-
-  defp format_dt(%DateTime{} = dt, _) do
-    Calendar.strftime(dt, "%Y-%m-%d %H:%M UTC")
-  end
 end

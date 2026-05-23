@@ -144,7 +144,13 @@ defmodule FaeWeb.BackupsLive.JobShow do
                     <td>
                       <span class={["badge badge-sm", status_class(run.status)]}>{run.status}</span>
                     </td>
-                    <td class="font-mono text-xs">{format_dt(run.started_at)}</td>
+                    <td class="font-mono text-xs">
+                      <.local_datetime
+                        value={run.started_at}
+                        tz={@timezone}
+                        format={:datetime_seconds}
+                      />
+                    </td>
                     <td class="font-mono text-xs">
                       {format_duration(run.started_at, run.finished_at)}
                     </td>
@@ -181,11 +187,6 @@ defmodule FaeWeb.BackupsLive.JobShow do
   defp status_class("skipped"), do: "badge-warning"
   defp status_class("snoozed"), do: "badge-warning"
   defp status_class(_), do: "badge-ghost"
-
-  defp format_dt(nil), do: "—"
-
-  defp format_dt(%DateTime{} = dt),
-    do: Calendar.strftime(dt, "%Y-%m-%d %H:%M:%S UTC")
 
   defp format_duration(_, nil), do: "—"
 
