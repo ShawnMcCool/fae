@@ -53,9 +53,9 @@ defmodule FaeWeb.DashboardLive do
     <Layouts.app flash={@flash} current_path={@current_path}>
       <div class="space-y-4">
         <.health_banner health={@view.health} />
-        <.system_section system={@view.system} />
-        <.jobs_section jobs={@view.jobs} />
-        <.activity_section activity={@view.activity} />
+        <.system_section system={@view.system} timezone={@timezone} />
+        <.jobs_section jobs={@view.jobs} timezone={@timezone} />
+        <.activity_section activity={@view.activity} timezone={@timezone} />
         <.destinations_section destinations={@view.destinations} />
       </div>
     </Layouts.app>
@@ -85,6 +85,7 @@ defmodule FaeWeb.DashboardLive do
   defp banner_class(:down), do: "bg-error/10"
 
   attr :system, :map, required: true
+  attr :timezone, :string, required: true
 
   defp system_section(assigns) do
     ~H"""
@@ -98,7 +99,7 @@ defmodule FaeWeb.DashboardLive do
         </dd>
         <dt class="text-sm opacity-75">Booted at</dt>
         <dd id="boot-at" class="font-mono">
-          {Calendar.strftime(@system.boot_at, "%Y-%m-%d %H:%M:%S UTC")}
+          <.local_datetime value={@system.boot_at} tz={@timezone} format={:datetime_seconds} />
         </dd>
         <dt class="text-sm opacity-75">Uptime</dt>
         <dd id="uptime" class="font-mono">{@system.uptime_label}</dd>
@@ -143,6 +144,7 @@ defmodule FaeWeb.DashboardLive do
   end
 
   attr :jobs, :map, required: true
+  attr :timezone, :string, required: true
 
   defp jobs_section(assigns) do
     ~H"""
@@ -169,7 +171,7 @@ defmodule FaeWeb.DashboardLive do
         <div class="stat">
           <div class="stat-title">Next fire</div>
           <div id="jobs-next-fire" class="stat-value text-base font-mono">
-            {format_dt(@jobs.soonest_next_fire)}
+            <.local_datetime value={@jobs.soonest_next_fire} tz={@timezone} format={:datetime} />
           </div>
         </div>
       </div>
@@ -199,7 +201,9 @@ defmodule FaeWeb.DashboardLive do
                     <span class={["badge badge-sm", row.status_class]}>{row.status_label}</span>
                   </td>
                   <td class="text-sm">{row.schedule_summary}</td>
-                  <td class="text-sm font-mono">{format_dt(row.next_fire)}</td>
+                  <td class="text-sm font-mono">
+                    <.local_datetime value={row.next_fire} tz={@timezone} format={:datetime} />
+                  </td>
                 </tr>
               <% end %>
             </tbody>
@@ -214,6 +218,7 @@ defmodule FaeWeb.DashboardLive do
   defp failing_color(_), do: "text-error"
 
   attr :activity, :list, required: true
+  attr :timezone, :string, required: true
 
   defp activity_section(assigns) do
     ~H"""
@@ -228,7 +233,7 @@ defmodule FaeWeb.DashboardLive do
             <li id={"activity-#{row.run.id}"} class="py-2 flex items-baseline gap-3 text-sm">
               <span class={["badge badge-sm", row.status_class]}>{row.run.status}</span>
               <span class="font-medium">{row.job_name}</span>
-              <span class="font-mono opacity-75">{format_dt(row.started_at)}</span>
+              <.local_datetime value={row.started_at} tz={@timezone} format={:datetime} />
               <span class="opacity-75">·</span>
               <span class="font-mono">{row.duration_label}</span>
               <%= if row.error_preview do %>
@@ -276,9 +281,6 @@ defmodule FaeWeb.DashboardLive do
     </section>
     """
   end
-
-  defp format_dt(nil), do: "—"
-  defp format_dt(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M UTC")
 
   defp refresh(socket, overrides \\ []) do
     now = Clock.now()

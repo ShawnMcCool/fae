@@ -6,15 +6,17 @@ defmodule FaeWeb.DisplayScopeTest do
 
   alias Fae.Display
 
-  test "the hook mounts cleanly and survives a timezone change broadcast", %{conn: conn} do
+  test "dashboard timestamps render in the configured zone and update live", %{conn: conn} do
     {:ok, _} = Display.put_timezone("Europe/Amsterdam")
 
     {:ok, view, _html} = live(conn, ~p"/")
-    assert render(view) =~ "Booted at"
+    # Amsterdam is always CET or CEST — proves @timezone reached <.local_datetime>.
+    assert render(view) =~ ~r/CES?T/
 
-    # Changing the zone broadcasts on "settings"; the attached handle_info
-    # hook must update @timezone without crashing the view.
+    # Switching the zone broadcasts on "settings"; the open view re-renders in UTC.
     {:ok, _} = Display.put_timezone("UTC")
-    assert render(view) =~ "Booted at"
+    rendered = render(view)
+    assert rendered =~ " UTC"
+    refute rendered =~ ~r/CES?T/
   end
 end

@@ -95,7 +95,9 @@ defmodule FaeWeb.ArchiveLive.Index do
                     </span>
                   </td>
                   <td class="text-sm">{run.uploaded_files}/{run.total_files}</td>
-                  <td class="text-sm">{format_dt(run.started_at)}</td>
+                  <td class="text-sm">
+                    <.local_datetime value={run.started_at} tz={@timezone} format={:datetime} />
+                  </td>
                   <td class="whitespace-nowrap">
                     <div class="flex justify-end gap-1">
                       <button
@@ -129,7 +131,4 @@ defmodule FaeWeb.ArchiveLive.Index do
     </Layouts.app>
     """
   end
-
-  defp format_dt(nil), do: "—"
-  defp format_dt(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M UTC")
 end
