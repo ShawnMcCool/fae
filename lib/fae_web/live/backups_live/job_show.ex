@@ -8,7 +8,7 @@ defmodule FaeWeb.BackupsLive.JobShow do
   use FaeWeb, :live_view
 
   alias Fae.Backups
-  alias Fae.Backups.{Jobs, Runs}
+  alias Fae.Backups.{Job, Jobs, Runs}
   alias FaeWeb.PathBrowser
 
   @impl true
@@ -34,18 +34,12 @@ defmodule FaeWeb.BackupsLive.JobShow do
   end
 
   def handle_event("open_browser", _params, socket) do
-    job = socket.assigns.job
-    start_rel = [job.prefix, job.slug] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join("/")
+    {:noreply, assign(socket, :browser, browse_descriptor(socket.assigns.job))}
+  end
 
-    browser = %{
-      source: {:remote, job.destination, start_rel},
-      mode: :view,
-      show_files: true,
-      title: "Backups in #{job.name}",
-      return_to: nil
-    }
-
-    {:noreply, assign(socket, :browser, browser)}
+  def handle_event("delete", _params, socket) do
+    {:ok, _} = Jobs.delete(socket.assigns.job)
+    {:noreply, push_navigate(socket, to: ~p"/backups")}
   end
 
   @impl true
@@ -57,6 +51,16 @@ defmodule FaeWeb.BackupsLive.JobShow do
   defp refresh(socket) do
     job = socket.assigns.job
     assign(socket, :runs, Runs.list_recent(job.id, 50))
+  end
+
+  defp browse_descriptor(job) do
+    %{
+      source: {:remote, job.destination, Job.backup_rel(job)},
+      mode: :view,
+      show_files: true,
+      title: "Backups in #{job.name}",
+      return_to: nil
+    }
   end
 
   @impl true
@@ -87,6 +91,14 @@ defmodule FaeWeb.BackupsLive.JobShow do
               class="btn btn-sm btn-primary"
             >
               Run now
+            </button>
+            <button
+              type="button"
+              phx-click="delete"
+              data-confirm={"Delete '#{@job.name}'?"}
+              class="btn btn-sm btn-error btn-outline"
+            >
+              Delete
             </button>
           </div>
         </div>

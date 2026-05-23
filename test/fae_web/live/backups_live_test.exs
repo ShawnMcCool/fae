@@ -67,31 +67,40 @@ defmodule FaeWeb.BackupsLiveTest do
       assert html =~ "Daily at 03:00"
     end
 
-    test "delete removes the job", %{conn: conn} do
+    test "the per-row browse button opens a view-only remote browser", %{conn: conn} do
+      Application.put_env(:fae, :storage_drivers, %{"s3" => DriverMock})
+      on_exit(fn -> Application.delete_env(:fae, :storage_drivers) end)
+
       dest = create_destination!()
-      job = create_job!(dest)
+      job = create_job!(dest, %{prefix: "Family", slug: "daily-db"})
 
-      {:ok, view, _html} = live(conn, ~p"/backups")
-      view |> element("button[phx-click='delete'][phx-value-id='#{job.id}']") |> render_click()
+      stub(DriverMock, :list_prefixes, fn _dest, prefix ->
+        assert prefix == "Family/daily-db/"
 
-      refute Jobs.get(job.id)
-    end
+        {:ok,
+         %{
+           prefixes: [],
+           files: [
+             %{
+               key: "Family/daily-db/2026-05-01.tar.gz",
+               size: 2048,
+               last_modified: ~U[2026-05-01 12:00:00Z]
+             }
+           ]
+         }}
+      end)
 
-    test "run_now triggers a run (side-effect visible in run history)", %{conn: conn} do
-      dest = create_destination!()
-      job = create_job!(dest)
-
-      # Oban's :inline test mode means the click runs the pipeline
-      # synchronously. The source path doesn't exist so the run row
-      # ends up "failed" — which is fine; we just need to see that a
-      # run was attempted.
       {:ok, view, _html} = live(conn, ~p"/backups")
 
       view
-      |> element("button[phx-click='run_now'][phx-value-id='#{job.id}']")
+      |> element("button[phx-click='open_browser'][phx-value-id='#{job.id}']")
       |> render_click()
 
-      assert [_ | _] = Fae.Backups.Runs.list_recent(job.id, 10)
+      html = render_async(view)
+
+      assert html =~ "2026-05-01.tar.gz"
+      assert html =~ "2.0 KiB"
+      refute html =~ "Use this folder"
     end
   end
 
@@ -185,6 +194,35 @@ defmodule FaeWeb.BackupsLiveTest do
       assert html =~ "2.0 KiB"
       # View-only: no selection affordance.
       refute html =~ "Use this folder"
+    end
+
+    test "run_now triggers a run (side-effect visible in run history)", %{conn: conn} do
+      dest = create_destination!()
+      job = create_job!(dest)
+
+      # Oban's :inline test mode means the click runs the pipeline
+      # synchronously. The source path doesn't exist so the run row
+      # ends up "failed" — which is fine; we just need to see that a
+      # run was attempted.
+      {:ok, view, _html} = live(conn, ~p"/backups/#{job.id}")
+
+      view
+      |> element("button[phx-click='run_now'][phx-value-id='#{job.id}']")
+      |> render_click()
+
+      assert [_ | _] = Fae.Backups.Runs.list_recent(job.id, 10)
+    end
+
+    test "delete removes the job and returns to the index", %{conn: conn} do
+      dest = create_destination!()
+      job = create_job!(dest)
+
+      {:ok, view, _html} = live(conn, ~p"/backups/#{job.id}")
+
+      assert {:error, {:live_redirect, %{to: "/backups"}}} =
+               view |> element("button[phx-click='delete']") |> render_click()
+
+      refute Jobs.get(job.id)
     end
   end
 

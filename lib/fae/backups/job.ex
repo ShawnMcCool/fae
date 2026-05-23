@@ -202,6 +202,19 @@ defmodule Fae.Backups.Job do
     end
   end
 
+  @doc """
+  Where this job's backups live relative to the destination's
+  `path_prefix` — `"<prefix>/<slug>"`, with an empty/blank prefix
+  omitted. `FaeWeb.PathBrowser` prepends the destination prefix, so
+  this is the rel the remote browser opens into.
+  """
+  @spec backup_rel(t()) :: String.t()
+  def backup_rel(%__MODULE__{prefix: prefix, slug: slug}) do
+    [prefix, slug]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join("/")
+  end
+
   @doc "Allowed source_kind values."
   def source_kinds, do: @source_kinds
 

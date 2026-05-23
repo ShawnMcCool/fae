@@ -1,14 +1,17 @@
 defmodule FaeWeb.BackupsLive.Index do
   @moduledoc """
-  Lists every backup job with last-run status, next scheduled run,
-  and per-row actions (Run now, Edit, Delete). Subscribes to
-  `backups:jobs` and `backups:runs` for real-time updates.
+  Lists every backup job with last-run status and next scheduled run,
+  plus a per-row button to browse that job's backups on the remote
+  destination. Per-job actions (run now, edit, delete) live on the
+  job's detail page. Subscribes to `backups:jobs` and `backups:runs`
+  for real-time updates.
   """
 
   use FaeWeb, :live_view
 
   alias Fae.Backups
-  alias Fae.Backups.{Jobs, Recurrence, Runs}
+  alias Fae.Backups.{Job, Jobs, Recurrence, Runs}
+  alias FaeWeb.PathBrowser
 
   @impl true
   def mount(_params, _session, socket) do
@@ -20,23 +23,15 @@ defmodule FaeWeb.BackupsLive.Index do
     {:ok,
      socket
      |> assign(:page_title, "Backup jobs")
+     |> assign(:browser, nil)
      |> load_rows()}
   end
 
   @impl true
-  def handle_event("run_now", %{"id" => id}, socket) do
-    _ = Backups.run_now(id)
-    {:noreply, load_rows(socket)}
-  end
-
-  def handle_event("delete", %{"id" => id}, socket) do
-    case Jobs.get(id) do
-      nil ->
-        {:noreply, socket}
-
-      job ->
-        {:ok, _} = Jobs.delete(job)
-        {:noreply, load_rows(socket)}
+  def handle_event("open_browser", %{"id" => id}, socket) do
+    case Enum.find(socket.assigns.rows, &(&1.job.id == id)) do
+      nil -> {:noreply, socket}
+      %{job: job} -> {:noreply, assign(socket, :browser, browse_descriptor(job))}
     end
   end
 
@@ -44,6 +39,7 @@ defmodule FaeWeb.BackupsLive.Index do
   def handle_info({:job_changed, _}, socket), do: {:noreply, load_rows(socket)}
   def handle_info({:run_started, _}, socket), do: {:noreply, load_rows(socket)}
   def handle_info({:run_finished, _, _, _}, socket), do: {:noreply, load_rows(socket)}
+  def handle_info({:path_browser, :closed}, socket), do: {:noreply, assign(socket, :browser, nil)}
   def handle_info(_, socket), do: {:noreply, socket}
 
   defp load_rows(socket) do
@@ -66,6 +62,16 @@ defmodule FaeWeb.BackupsLive.Index do
     _ -> nil
   end
 
+  defp browse_descriptor(job) do
+    %{
+      source: {:remote, job.destination, Job.backup_rel(job)},
+      mode: :view,
+      show_files: true,
+      title: "Backups in #{job.name}",
+      return_to: nil
+    }
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -73,14 +79,9 @@ defmodule FaeWeb.BackupsLive.Index do
       <section class="card bg-base-200 p-6 space-y-4">
         <div class="flex items-center justify-between gap-4">
           <h2 class="text-xl font-semibold">Backup jobs</h2>
-          <div class="flex gap-2">
-            <.link navigate={~p"/backups/destinations"} class="btn btn-sm btn-ghost">
-              Destinations
-            </.link>
-            <.link navigate={~p"/backups/new"} class="btn btn-sm btn-primary">
-              New job
-            </.link>
-          </div>
+          <.link navigate={~p"/backups/new"} class="btn btn-sm btn-primary">
+            New job
+          </.link>
         </div>
 
         <%= if @rows == [] do %>
@@ -98,7 +99,7 @@ defmodule FaeWeb.BackupsLive.Index do
                   <th>Schedule</th>
                   <th>Last run</th>
                   <th>Next run</th>
-                  <th class="text-right">Actions</th>
+                  <th class="text-right"><span class="sr-only">Browse</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -120,29 +121,18 @@ defmodule FaeWeb.BackupsLive.Index do
                       {last_run_cell(assigns, last_run)}
                     </td>
                     <td class="text-sm">{format_dt(next_fire, job.enabled)}</td>
-                    <td class="whitespace-nowrap">
-                      <div class="flex justify-end gap-1">
-                        <button
-                          type="button"
-                          phx-click="run_now"
-                          phx-value-id={job.id}
-                          class="btn btn-xs btn-primary"
-                        >
-                          Run now
-                        </button>
-                        <.link navigate={~p"/backups/#{job.id}/edit"} class="btn btn-xs btn-ghost">
-                          Edit
-                        </.link>
-                        <button
-                          type="button"
-                          phx-click="delete"
-                          phx-value-id={job.id}
-                          data-confirm={"Delete '#{job.name}'?"}
-                          class="btn btn-xs btn-error btn-outline"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                    <td class="text-right">
+                      <button
+                        :if={job.destination}
+                        type="button"
+                        phx-click="open_browser"
+                        phx-value-id={job.id}
+                        class="btn btn-ghost btn-sm btn-square"
+                        title="Browse backups"
+                        aria-label={"Browse backups for #{job.name}"}
+                      >
+                        <.icon name="hero-folder-open" class="size-5" />
+                      </button>
                     </td>
                   </tr>
                 <% end %>
@@ -151,6 +141,17 @@ defmodule FaeWeb.BackupsLive.Index do
           </div>
         <% end %>
       </section>
+
+      <.live_component
+        :if={@browser}
+        module={PathBrowser}
+        id="path-browser"
+        source={@browser.source}
+        mode={@browser.mode}
+        show_files={@browser.show_files}
+        title={@browser.title}
+        return_to={@browser.return_to}
+      />
     </Layouts.app>
     """
   end

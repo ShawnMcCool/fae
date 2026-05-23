@@ -209,6 +209,20 @@ defmodule Fae.Backups.JobTest do
     end
   end
 
+  describe "backup_rel/1" do
+    test "joins prefix and slug" do
+      assert Job.backup_rel(%Job{prefix: "Family", slug: "daily-db"}) == "Family/daily-db"
+    end
+
+    test "omits a blank prefix" do
+      assert Job.backup_rel(%Job{prefix: "", slug: "daily-db"}) == "daily-db"
+    end
+
+    test "omits a nil prefix" do
+      assert Job.backup_rel(%Job{prefix: nil, slug: "daily-db"}) == "daily-db"
+    end
+  end
+
   describe "jobs context broadcasts" do
     test "create broadcasts {:job_changed, id}", %{destination: destination} do
       Phoenix.PubSub.subscribe(Fae.PubSub, Fae.Topics.backups_jobs())
