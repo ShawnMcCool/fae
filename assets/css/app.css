@@ -103,3 +103,14 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* Project convention: values inside badges and buttons never word-wrap.
+   These rules live outside @layer so they win over daisyUI's component
+   styles. Content stays on one line; overly long content overflows
+   (truncate at the call site if that's a concern) rather than breaking.
+   `flex-wrap: nowrap` also keeps an icon + label from breaking apart. */
+.badge,
+.btn {
+  white-space: nowrap;
+  flex-wrap: nowrap;
+}

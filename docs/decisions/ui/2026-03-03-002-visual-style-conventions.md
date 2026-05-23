@@ -33,6 +33,16 @@ The soft variant produces a low-saturation fill that reads as healthy/attention/
 2. **Destructive/dismiss actions:** ghost style — minimal visual weight for secondary or negative actions.
 3. **Primary CTA:** solid fill, one per view, where a single dominant action is needed (e.g., form submit).
 
+### No wrapping in badges and buttons
+
+Values inside badges and buttons never word-wrap. This is enforced structurally
+by a global rule in `assets/css/app.css` (`.badge, .btn { white-space: nowrap;
+flex-wrap: nowrap }`), written outside `@layer` so it wins over daisyUI's
+component styles. Content stays on one line; overly long content overflows rather
+than breaking, so truncate at the call site (e.g. `truncate max-w-…`) when a value
+can be unbounded. No per-call class discipline is required — the rule applies to
+every badge and button automatically.
+
 ### Consequences
 
 * Good, because visual volume matches semantic weight — healthy states recede; warnings and errors stand out by contrast
