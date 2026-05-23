@@ -221,7 +221,7 @@ defmodule FaeWeb.UpdateLive do
   defp stage_error_label(other), do: "stage error: #{inspect(other)}"
 
   defp format_at(nil), do: "an unknown time"
-  defp format_at(%DateTime{} = dt), do: Calendar.strftime(dt, "%H:%M UTC")
+  defp format_at(%DateTime{} = dt), do: FaeWeb.TimeDisplay.format(dt, "UTC", :time)
 
   @doc "Human-readable label for a systemd service state map (from Service.state/0)."
   def service_state_label(%{under_systemd: false}), do: "Not under systemd"
@@ -268,14 +268,16 @@ defmodule FaeWeb.UpdateLive do
               </span>
               <span>Published</span>
               <span id="latest-published">
-                {Calendar.strftime(@latest_release.published_at, "%Y-%m-%d %H:%M UTC")}
+                <.local_datetime
+                  value={@latest_release.published_at}
+                  tz={@timezone}
+                  format={:datetime}
+                />
               </span>
             <% end %>
             <%= if @last_check_at do %>
               <span>Last checked</span>
-              <span id="last-checked" title={DateTime.to_iso8601(@last_check_at)}>
-                {time_ago(@last_check_at)}
-              </span>
+              <.relative_time id="last-checked" value={@last_check_at} tz={@timezone} />
             <% end %>
           </div>
         </div>
