@@ -9,6 +9,15 @@ config :fae, Fae.SystemStatus, tick_interval_ms: :infinity
 # job queue's worker pool or cron schedule firing at real wall-clock time.
 config :fae, Oban, testing: :inline
 
+# Don't re-enqueue resumable archive runs at app boot during tests — the
+# boot hook would query the Repo before the per-test sandbox is set up.
+# Tests drive the worker directly.
+config :fae, Fae.Archive, resume_on_boot: false
+
+# Short progress-broadcast interval so progress assertions don't wait
+# half a second per check.
+config :fae, :archive_progress_interval_ms, 25
+
 # Disable the application-level Backups.Scheduler in tests so its
 # global GenServer doesn't fight with per-test SQL sandboxes. Tests
 # that need scheduling logic start a Scheduler manually inside the

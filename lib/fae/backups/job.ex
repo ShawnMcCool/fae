@@ -35,7 +35,7 @@ defmodule Fae.Backups.Job do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias Fae.Backups.Destination
+  alias Fae.Storage.Destination
 
   @primary_key {:id, Ecto.UUID, autogenerate: true}
   @foreign_key_type Ecto.UUID

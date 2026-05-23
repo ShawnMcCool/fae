@@ -40,7 +40,8 @@ defmodule Fae.Backups.RunPipeline do
 
   require Logger
 
-  alias Fae.Backups.{Drivers, ErrorFormatter, Job, Jobs, Packager, Retention, Runs, Sources}
+  alias Fae.Backups.{ErrorFormatter, Job, Jobs, Packager, Retention, Runs, Sources}
+  alias Fae.Storage.Drivers
   alias Fae.Topics
 
   @type result ::

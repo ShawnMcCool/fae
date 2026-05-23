@@ -4,15 +4,16 @@ defmodule Fae.Backups.RunWorkerTest do
 
   import Mox
 
-  alias Fae.Backups.Drivers.DriverMock
-  alias Fae.Backups.{Destinations, Jobs, RunRegistry, Runs, RunWorker}
+  alias Fae.Storage.Drivers.DriverMock
+  alias Fae.Backups.{Jobs, RunRegistry, Runs, RunWorker}
+  alias Fae.Storage.Destinations
 
   setup :verify_on_exit!
   setup :set_mox_global
 
   setup do
-    Application.put_env(:fae, :backups_drivers, %{"s3" => DriverMock})
-    on_exit(fn -> Application.delete_env(:fae, :backups_drivers) end)
+    Application.put_env(:fae, :storage_drivers, %{"s3" => DriverMock})
+    on_exit(fn -> Application.delete_env(:fae, :storage_drivers) end)
 
     {:ok, destination} =
       Destinations.create(%{

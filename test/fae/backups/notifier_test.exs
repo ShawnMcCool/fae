@@ -1,7 +1,8 @@
 defmodule Fae.Backups.NotifierTest do
   use Fae.DataCase, async: false
 
-  alias Fae.Backups.{Destinations, Jobs, Notifier, Runs}
+  alias Fae.Backups.{Jobs, Notifier, Runs}
+  alias Fae.Storage.Destinations
   alias Fae.Topics
 
   setup do

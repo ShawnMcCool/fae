@@ -8,7 +8,8 @@ defmodule FaeWeb.DashboardLive do
 
   use FaeWeb, :live_view
 
-  alias Fae.Backups.{Destinations, Jobs, Runs}
+  alias Fae.Backups.{Jobs, Runs}
+  alias Fae.Storage.Destinations
   alias Fae.{Clock, SelfUpdate, SystemStatus, Topics, Version}
   alias FaeWeb.DashboardView
 

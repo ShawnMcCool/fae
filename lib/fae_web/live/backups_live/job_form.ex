@@ -7,7 +7,8 @@ defmodule FaeWeb.BackupsLive.JobForm do
 
   use FaeWeb, :live_view
 
-  alias Fae.Backups.{Destinations, Job, Jobs}
+  alias Fae.Backups.{Job, Jobs}
+  alias Fae.Storage.Destinations
 
   @impl true
   def mount(params, _session, socket) do

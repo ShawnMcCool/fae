@@ -25,7 +25,7 @@ config :fae, :environment, config_env()
 config :fae, Oban,
   engine: Oban.Engines.Lite,
   repo: Fae.Repo,
-  queues: [self_update: 1, backups: 1],
+  queues: [self_update: 1, backups: 1, archive: 1],
   plugins: [
     {Oban.Plugins.Cron,
      crontab: [

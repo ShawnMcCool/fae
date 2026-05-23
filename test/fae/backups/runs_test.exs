@@ -1,7 +1,8 @@
 defmodule Fae.Backups.RunsTest do
   use Fae.DataCase, async: false
 
-  alias Fae.Backups.{Destinations, Jobs, Runs}
+  alias Fae.Backups.{Jobs, Runs}
+  alias Fae.Storage.Destinations
 
   setup do
     {:ok, destination} =

@@ -5,8 +5,9 @@ defmodule FaeWeb.BackupsLiveTest do
   import Mox
   import Phoenix.LiveViewTest
 
-  alias Fae.Backups.{Destinations, Jobs}
-  alias Fae.Backups.Drivers.DriverMock
+  alias Fae.Backups.Jobs
+  alias Fae.Storage.Destinations
+  alias Fae.Storage.Drivers.DriverMock
 
   setup :verify_on_exit!
   setup :set_mox_global
@@ -153,8 +154,8 @@ defmodule FaeWeb.BackupsLiveTest do
 
   describe "DestinationForm new" do
     setup do
-      Application.put_env(:fae, :backups_drivers, %{"s3" => DriverMock})
-      on_exit(fn -> Application.delete_env(:fae, :backups_drivers) end)
+      Application.put_env(:fae, :storage_drivers, %{"s3" => DriverMock})
+      on_exit(fn -> Application.delete_env(:fae, :storage_drivers) end)
       :ok
     end
 

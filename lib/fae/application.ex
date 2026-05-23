@@ -18,6 +18,7 @@ defmodule Fae.Application do
       Fae.SystemStatus,
       Fae.SelfUpdate.Updater,
       Fae.Backups.Supervisor,
+      Fae.Archive.Supervisor,
       FaeWeb.Endpoint
     ]
 
@@ -45,6 +46,7 @@ defmodule Fae.Application do
     end
 
     Fae.Backups.boot!()
+    Fae.Archive.boot!()
 
     result
   end

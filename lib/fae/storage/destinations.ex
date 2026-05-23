@@ -1,7 +1,7 @@
-defmodule Fae.Backups.Destinations do
+defmodule Fae.Storage.Destinations do
   @moduledoc """
-  Context for `Fae.Backups.Destination` — first-class, reusable
-  destinations referenced by backup jobs.
+  Context for `Fae.Storage.Destination` — first-class, reusable
+  destinations referenced by backup jobs and archive runs.
 
   Two creation paths are exposed:
 
@@ -18,7 +18,7 @@ defmodule Fae.Backups.Destinations do
 
   import Ecto.Query, only: [from: 2]
 
-  alias Fae.Backups.{Destination, Drivers}
+  alias Fae.Storage.{Destination, Drivers}
   alias Fae.Repo
 
   @spec list() :: [Destination.t()]

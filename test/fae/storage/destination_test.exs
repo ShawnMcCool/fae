@@ -1,10 +1,10 @@
-defmodule Fae.Backups.DestinationTest do
+defmodule Fae.Storage.DestinationTest do
   use Fae.DataCase, async: false
 
   import Mox
 
-  alias Fae.Backups.{Destination, Destinations}
-  alias Fae.Backups.Drivers.DriverMock
+  alias Fae.Storage.{Destination, Destinations}
+  alias Fae.Storage.Drivers.DriverMock
 
   setup :verify_on_exit!
 
@@ -82,8 +82,8 @@ defmodule Fae.Backups.DestinationTest do
 
   describe "create_with_verification/1" do
     setup do
-      Application.put_env(:fae, :backups_drivers, %{"s3" => DriverMock})
-      on_exit(fn -> Application.delete_env(:fae, :backups_drivers) end)
+      Application.put_env(:fae, :storage_drivers, %{"s3" => DriverMock})
+      on_exit(fn -> Application.delete_env(:fae, :storage_drivers) end)
       :ok
     end
 

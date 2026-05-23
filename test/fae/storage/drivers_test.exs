@@ -1,26 +1,26 @@
-defmodule Fae.Backups.DriversTest do
+defmodule Fae.Storage.DriversTest do
   use ExUnit.Case, async: true
 
   import Mox
 
-  alias Fae.Backups.Destination
-  alias Fae.Backups.Drivers
-  alias Fae.Backups.Drivers.{DriverMock, S3}
+  alias Fae.Storage.Destination
+  alias Fae.Storage.Drivers
+  alias Fae.Storage.Drivers.{DriverMock, S3}
 
   setup :verify_on_exit!
 
   describe "driver_for/1" do
-    test "returns Fae.Backups.Drivers.S3 by default" do
+    test "returns Fae.Storage.Drivers.S3 by default" do
       assert Drivers.driver_for(%Destination{driver: "s3"}) == S3
     end
 
-    test "uses :fae, :backups_drivers config override" do
-      Application.put_env(:fae, :backups_drivers, %{"s3" => DriverMock})
+    test "uses :fae, :storage_drivers config override" do
+      Application.put_env(:fae, :storage_drivers, %{"s3" => DriverMock})
 
       try do
         assert Drivers.driver_for(%Destination{driver: "s3"}) == DriverMock
       after
-        Application.delete_env(:fae, :backups_drivers)
+        Application.delete_env(:fae, :storage_drivers)
       end
     end
   end
@@ -84,6 +84,33 @@ defmodule Fae.Backups.DriversTest do
       """
 
       assert {[], nil} = S3.parse_list(empty)
+    end
+  end
+
+  describe "S3 multipart helpers" do
+    test "parse_upload_id extracts the upload id" do
+      xml =
+        ~s(<?xml version="1.0"?><InitiateMultipartUploadResult><Bucket>b</Bucket><Key>k</Key><UploadId>abc-123</UploadId></InitiateMultipartUploadResult>)
+
+      assert S3.parse_upload_id(xml) == "abc-123"
+    end
+
+    test "parse_upload_id returns nil when absent" do
+      assert S3.parse_upload_id("<Error/>") == nil
+    end
+
+    test "parse_complete_etag extracts the final etag (quotes preserved)" do
+      xml =
+        ~s(<CompleteMultipartUploadResult><Location>x</Location><ETag>"deadbeef-2"</ETag></CompleteMultipartUploadResult>)
+
+      assert S3.parse_complete_etag(xml) == ~s("deadbeef-2")
+    end
+
+    test "build_complete_xml lists parts in order with their etags" do
+      xml = S3.build_complete_xml([{1, ~s("a")}, {2, ~s("b")}])
+
+      assert xml ==
+               ~s(<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>"a"</ETag></Part><Part><PartNumber>2</PartNumber><ETag>"b"</ETag></Part></CompleteMultipartUpload>)
     end
   end
 end

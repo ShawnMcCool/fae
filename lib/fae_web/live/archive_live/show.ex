@@ -1,0 +1,179 @@
+defmodule FaeWeb.ArchiveLive.Show do
+  @moduledoc """
+  Detail view for one archive run: summary, a live progress bar driven
+  by `archive:progress`, and the per-file table. Subscribes to both
+  `archive:runs` (status) and `archive:progress` (in-flight tally).
+  """
+  use FaeWeb, :live_view
+
+  alias Fae.Archive
+  alias Fae.Archive.Items
+  alias Fae.Archive.ProgressServer
+  alias Fae.Archive.Runs
+  alias FaeWeb.ArchiveLive.View
+
+  @impl true
+  def mount(%{"id" => id}, _session, socket) do
+    if connected?(socket) do
+      :ok = Archive.subscribe_runs()
+      :ok = Archive.subscribe_progress()
+    end
+
+    run = Runs.get!(id)
+
+    {:ok,
+     socket
+     |> assign(:page_title, run_title(run))
+     |> assign(:run, run)
+     |> assign(:items, Items.list_for_run(id))
+     |> assign(:progress, ProgressServer.snapshot(id))}
+  end
+
+  @impl true
+  def handle_event("retry_failed", _params, socket) do
+    _ = Archive.retry_failed(socket.assigns.run.id)
+    {:noreply, refresh(socket)}
+  end
+
+  @impl true
+  def handle_info({:run_changed, id}, socket), do: {:noreply, maybe_refresh(socket, id)}
+  def handle_info({:run_finished, id, _status}, socket), do: {:noreply, maybe_refresh(socket, id)}
+
+  def handle_info({:archive_progress, id, snapshot}, socket) do
+    if id == socket.assigns.run.id do
+      {:noreply, assign(socket, :progress, snapshot)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(_message, socket), do: {:noreply, socket}
+
+  defp maybe_refresh(socket, id) do
+    if id == socket.assigns.run.id, do: refresh(socket), else: socket
+  end
+
+  defp refresh(socket) do
+    id = socket.assigns.run.id
+
+    socket
+    |> assign(:run, Runs.get!(id))
+    |> assign(:items, Items.list_for_run(id))
+    |> assign(:progress, ProgressServer.snapshot(id))
+  end
+
+  # Live snapshot wins while a run is in flight; otherwise fall back to
+  # the durable counters on the run row.
+  defp progress_numbers(run, nil) do
+    {run.uploaded_files, run.failed_files, run.total_files, run.uploaded_bytes, run.total_bytes}
+  end
+
+  defp progress_numbers(_run, snapshot) do
+    {snapshot.uploaded_files, snapshot.failed_files, snapshot.total_files,
+     snapshot.uploaded_bytes, snapshot.total_bytes}
+  end
+
+  defp run_title(run), do: if(run.label == "", do: "Archive", else: run.label)
+
+  @impl true
+  def render(assigns) do
+    {uploaded_files, failed_files, total_files, uploaded_bytes, total_bytes} =
+      progress_numbers(assigns.run, assigns.progress)
+
+    assigns =
+      assign(assigns,
+        uploaded_files: uploaded_files,
+        failed_files: failed_files,
+        total_files: total_files,
+        uploaded_bytes: uploaded_bytes,
+        total_bytes: total_bytes,
+        percent: View.percent(uploaded_bytes, total_bytes)
+      )
+
+    ~H"""
+    <Layouts.app flash={@flash} current_path={@current_path}>
+      <section class="card bg-base-200 p-6 space-y-4">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <h2 class="text-xl font-semibold">{run_title(@run)}</h2>
+            <div class="text-sm opacity-60 font-mono">{@run.source_path}</div>
+          </div>
+          <div class="flex gap-2">
+            <.link navigate={~p"/archive"} class="btn btn-sm btn-ghost">Back</.link>
+            <button
+              :if={@run.status == "partial"}
+              type="button"
+              phx-click="retry_failed"
+              class="btn btn-sm btn-warning btn-outline"
+            >
+              Retry failed
+            </button>
+          </div>
+        </div>
+
+        <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
+          <dt class="opacity-60">Status</dt>
+          <dd>
+            <span class={["badge badge-sm", View.status_badge_class(@run.status)]}>
+              {@run.status}
+            </span>
+          </dd>
+          <dt class="opacity-60">Destination</dt>
+          <dd>{if @run.destination, do: @run.destination.name, else: "—"}</dd>
+          <dt class="opacity-60">Label</dt>
+          <dd>{if @run.label == "", do: "(none)", else: @run.label}</dd>
+        </dl>
+
+        <div class="space-y-1">
+          <div class="flex justify-between text-sm">
+            <span>
+              {@uploaded_files}/{@total_files} files · {View.human_bytes(@uploaded_bytes)} of {View.human_bytes(
+                @total_bytes
+              )}
+            </span>
+            <span :if={@failed_files > 0} class="text-error">{@failed_files} failed</span>
+          </div>
+          <progress class="progress progress-primary w-full" value={@percent} max="100"></progress>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Status</th>
+                <th>Size</th>
+                <th>SHA256</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={item <- @items} id={"item-#{item.id}"}>
+                <td class="font-mono text-xs">{item.relative_path}</td>
+                <td>
+                  <span class={["badge badge-xs", View.status_badge_class(item.status)]}>
+                    {item.status}
+                  </span>
+                  <div
+                    :if={item.error_message}
+                    class="text-xs text-error truncate max-w-xs"
+                    title={item.error_message}
+                  >
+                    {item.error_message}
+                  </div>
+                </td>
+                <td class="text-xs">
+                  {if item.byte_size, do: View.human_bytes(item.byte_size), else: "—"}
+                </td>
+                <td class="font-mono text-xs opacity-60">{short_sha(item.sha256)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </Layouts.app>
+    """
+  end
+
+  defp short_sha(nil), do: "—"
+  defp short_sha(sha) when is_binary(sha), do: String.slice(sha, 0, 12)
+end

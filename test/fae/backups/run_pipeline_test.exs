@@ -3,14 +3,15 @@ defmodule Fae.Backups.RunPipelineTest do
 
   import Mox
 
-  alias Fae.Backups.Drivers.DriverMock
-  alias Fae.Backups.{Destinations, Jobs, Runs, RunPipeline}
+  alias Fae.Storage.Drivers.DriverMock
+  alias Fae.Backups.{Jobs, Runs, RunPipeline}
+  alias Fae.Storage.Destinations
 
   setup :verify_on_exit!
 
   setup do
-    Application.put_env(:fae, :backups_drivers, %{"s3" => DriverMock})
-    on_exit(fn -> Application.delete_env(:fae, :backups_drivers) end)
+    Application.put_env(:fae, :storage_drivers, %{"s3" => DriverMock})
+    on_exit(fn -> Application.delete_env(:fae, :storage_drivers) end)
 
     {:ok, destination} =
       Destinations.create(%{

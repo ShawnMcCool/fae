@@ -1,8 +1,12 @@
-defmodule Fae.Backups.Destination do
+defmodule Fae.Storage.Destination do
   @moduledoc """
-  A first-class, reusable backup destination. Holds the driver + the
-  credentials/endpoint needed to talk to it. Jobs reference a
-  destination plus a per-job prefix.
+  A first-class, reusable storage destination, shared by the Backups
+  and Archive tools. Holds the driver + the credentials/endpoint
+  needed to talk to it. Backup jobs and archive runs reference a
+  destination plus their own prefix/label.
+
+  The table is named `backup_destinations` for historical reasons (it
+  predates the Archive tool); the data is destination-generic.
 
   Currently the only supported driver is `"s3"` (S3-compatible — Hetzner
   Object Storage, AWS S3, MinIO, etc.). `force_path_style` should be

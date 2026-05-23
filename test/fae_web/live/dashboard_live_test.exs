@@ -6,7 +6,8 @@ defmodule FaeWeb.DashboardLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Fae.Backups.{Destinations, Jobs, Runs}
+  alias Fae.Backups.{Jobs, Runs}
+  alias Fae.Storage.Destinations
   alias Fae.Topics
 
   describe "GET /" do

@@ -5,7 +5,7 @@ defmodule FaeWeb.BackupsLive.DestinationsIndex do
 
   use FaeWeb, :live_view
 
-  alias Fae.Backups.Destinations
+  alias Fae.Storage.Destinations
 
   @impl true
   def mount(_params, _session, socket) do

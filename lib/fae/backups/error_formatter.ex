@@ -40,7 +40,7 @@ defmodule Fae.Backups.ErrorFormatter do
 
   def summarize({:network, reason}), do: network_message(reason)
 
-  # S3-shaped errors from Fae.Backups.Drivers.S3.
+  # S3-shaped errors from Fae.Storage.Drivers.S3.
   def summarize({:s3_error, status, _body}), do: http_status_message(status)
 
   # Packager errors.

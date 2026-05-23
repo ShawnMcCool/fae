@@ -2,7 +2,8 @@ defmodule Fae.Backups.SchedulerTest do
   use Fae.DataCase, async: false
   use Oban.Testing, repo: Fae.Repo
 
-  alias Fae.Backups.{Destinations, Jobs, RunWorker, Scheduler}
+  alias Fae.Backups.{Jobs, RunWorker, Scheduler}
+  alias Fae.Storage.Destinations
 
   # Oban testing mode is process-local (Process.put), so the assertions
   # must run in the same process as the Oban.insert call. We invoke

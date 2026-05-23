@@ -9,4 +9,6 @@ defmodule Fae.Topics do
   def self_update_progress, do: "self_update:progress"
   def backups_runs, do: "backups:runs"
   def backups_jobs, do: "backups:jobs"
+  def archive_runs, do: "archive:runs"
+  def archive_progress, do: "archive:progress"
 end

@@ -5,7 +5,7 @@ defmodule FaeWeb.BackupsLive.DestinationForm do
 
   use FaeWeb, :live_view
 
-  alias Fae.Backups.{Destination, Destinations}
+  alias Fae.Storage.{Destination, Destinations}
 
   @impl true
   def mount(params, _session, socket) do

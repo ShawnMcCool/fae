@@ -26,6 +26,11 @@ defmodule FaeWeb.SidebarNav do
     },
     %{
       items: [
+        %{path: "/archive", label: "Archive", icon: "hero-cloud-arrow-up"}
+      ]
+    },
+    %{
+      items: [
         %{path: "/update", label: "Updates", icon: "hero-arrow-down-tray"}
       ]
     }

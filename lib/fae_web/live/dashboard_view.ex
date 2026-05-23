@@ -46,7 +46,7 @@ defmodule FaeWeb.DashboardView do
           jobs: [Job.t()],
           last_runs: %{optional(Ecto.UUID.t()) => Run.t() | nil},
           recent_runs: [Run.t()],
-          destinations: [Fae.Backups.Destination.t()],
+          destinations: [Fae.Storage.Destination.t()],
           version: String.t(),
           latest_release: map() | nil,
           self_update_phase: atom(),
@@ -74,7 +74,7 @@ defmodule FaeWeb.DashboardView do
             rows: [job_row()]
           },
           activity: [activity_row()],
-          destinations: [Fae.Backups.Destination.t()]
+          destinations: [Fae.Storage.Destination.t()]
         }
 
   @spec build(input()) :: output()
