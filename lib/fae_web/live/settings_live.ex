@@ -6,8 +6,9 @@ defmodule FaeWeb.SettingsLive do
   page re-renders immediately (see `FaeWeb.DisplayScope`).
 
   A colocated JS hook reports the browser's IANA timezone so the user
-  can adopt it in one click; a searchable `<select>` is the manual
-  override. `@timezone` (the current value) is supplied by DisplayScope.
+  can adopt it in one click; a native `<select>` of all zones is the
+  manual override. `@timezone` (the current value) is supplied by
+  DisplayScope.
   """
   use FaeWeb, :live_view
 

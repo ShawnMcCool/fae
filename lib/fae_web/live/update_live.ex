@@ -221,6 +221,8 @@ defmodule FaeWeb.UpdateLive do
   defp stage_error_label(other), do: "stage error: #{inspect(other)}"
 
   defp format_at(nil), do: "an unknown time"
+  # Rendered in UTC on purpose: this is the rate-limit reset time embedded
+  # in a pure error string, which has no socket/@timezone in scope.
   defp format_at(%DateTime{} = dt), do: FaeWeb.TimeDisplay.format(dt, "UTC", :time)
 
   @doc "Human-readable label for a systemd service state map (from Service.state/0)."

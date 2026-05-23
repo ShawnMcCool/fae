@@ -20,7 +20,7 @@ defmodule Fae.Display do
   def timezone do
     case Settings.get_by_key(@settings_key) do
       {:ok, %{value: %{"timezone" => tz}}} when is_binary(tz) -> tz
-      _ -> @default_timezone
+      _ -> default_timezone()
     end
   end
 
@@ -42,7 +42,7 @@ defmodule Fae.Display do
 
   @doc "Sorted list of IANA zone names for a `<select>`."
   @spec zone_options() :: [String.t()]
-  def zone_options, do: zone_list()
+  def zone_options, do: Enum.sort(zone_list())
 
   @doc "The default timezone used before the user picks one."
   @spec default_timezone() :: String.t()
