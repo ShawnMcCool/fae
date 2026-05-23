@@ -26,7 +26,9 @@ defmodule FaeWeb.ArchiveLive.Show do
      |> assign(:page_title, run_title(run))
      |> assign(:run, run)
      |> assign(:items, Items.list_for_run(id))
-     |> assign(:progress, ProgressServer.snapshot(id))}
+     |> assign(:progress, ProgressServer.snapshot(id))
+     |> assign(:renaming, false)
+     |> assign(:rename_form, nil)}
   end
 
   @impl true
@@ -38,6 +40,42 @@ defmodule FaeWeb.ArchiveLive.Show do
   def handle_event("delete", _params, socket) do
     {:ok, _} = Runs.delete(socket.assigns.run)
     {:noreply, push_navigate(socket, to: ~p"/archive")}
+  end
+
+  def handle_event("open_rename", _params, socket) do
+    run = socket.assigns.run
+
+    {:noreply,
+     socket
+     |> assign(:renaming, true)
+     |> assign(:rename_form, to_form(Runs.rename_change(run, %{"name" => run.name})))}
+  end
+
+  def handle_event("cancel_rename", _params, socket) do
+    {:noreply, assign(socket, :renaming, false)}
+  end
+
+  def handle_event("validate_rename", %{"run" => attrs}, socket) do
+    changeset =
+      socket.assigns.run
+      |> Runs.rename_change(attrs)
+      |> Map.put(:action, :validate)
+
+    {:noreply, assign(socket, :rename_form, to_form(changeset))}
+  end
+
+  def handle_event("rename", %{"run" => attrs}, socket) do
+    case Archive.rename(socket.assigns.run.id, attrs) do
+      {:ok, _run} ->
+        {:noreply,
+         socket |> assign(:renaming, false) |> put_flash(:info, "Renamed.") |> refresh()}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, :rename_form, to_form(Map.put(changeset, :action, :validate)))}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Could not rename: #{inspect(reason)}")}
+    end
   end
 
   @impl true
@@ -108,6 +146,14 @@ defmodule FaeWeb.ArchiveLive.Show do
           <div class="flex gap-2">
             <.link navigate={~p"/archive"} class="btn btn-sm btn-ghost">Back</.link>
             <button type="button" phx-click="sync" class="btn btn-sm btn-primary">Sync now</button>
+            <button type="button" phx-click="open_rename" class="btn btn-sm btn-ghost">Rename</button>
+            <.link
+              :if={@run.status not in ["scanning", "uploading"]}
+              navigate={~p"/archive/#{@run.id}/edit"}
+              class="btn btn-sm btn-ghost"
+            >
+              Reconfigure
+            </.link>
             <button
               type="button"
               phx-click="delete"
@@ -117,6 +163,25 @@ defmodule FaeWeb.ArchiveLive.Show do
               Delete
             </button>
           </div>
+        </div>
+
+        <div :if={@renaming} class="modal modal-open">
+          <div class="modal-box">
+            <h3 class="text-lg font-semibold mb-3">Rename archive</h3>
+            <.form
+              for={@rename_form}
+              phx-change="validate_rename"
+              phx-submit="rename"
+              class="space-y-3"
+            >
+              <.input field={@rename_form[:name]} type="text" class="input input-bordered w-full" />
+              <div class="flex justify-end gap-2">
+                <button type="button" phx-click="cancel_rename" class="btn btn-ghost">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+              </div>
+            </.form>
+          </div>
+          <label class="modal-backdrop" phx-click="cancel_rename">Close</label>
         </div>
 
         <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">

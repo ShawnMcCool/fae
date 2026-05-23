@@ -1,9 +1,13 @@
-defmodule FaeWeb.ArchiveLive.New do
+defmodule FaeWeb.ArchiveLive.Form do
   @moduledoc """
-  Form to create a new archive: a friendly name, a source directory, the
-  remote folder it mirrors into, and a destination. On success the first
-  sync is enqueued and the user is sent to its detail page to watch
-  progress (and Sync now / Delete later).
+  Create a new archive (`:new`) or reconfigure an existing one (`:edit`).
+
+  Reconfigure is a clone-and-replace: it builds a brand-new archive from
+  the edited values and retires the old one. No bucket objects are
+  deleted; if the source / remote folder / destination changed, future
+  syncs upload into the new location and the existing files stay put.
+  Renaming (the friendly name only) is a separate, in-place action on the
+  detail page — not this form.
   """
   use FaeWeb, :live_view
 
@@ -13,12 +17,33 @@ defmodule FaeWeb.ArchiveLive.New do
   alias Fae.Storage.Destinations
 
   @impl true
-  def mount(_params, _session, socket) do
-    {:ok,
-     socket
-     |> assign(:page_title, "New archive")
-     |> assign(:destinations, Destinations.list())
-     |> assign(:form, to_form(Runs.change(%Run{})))}
+  def mount(params, _session, socket) do
+    socket = assign(socket, :destinations, Destinations.list())
+    {:ok, apply_action(socket, socket.assigns.live_action, params)}
+  end
+
+  defp apply_action(socket, :new, _params) do
+    socket
+    |> assign(:page_title, "New archive")
+    |> assign(:run, nil)
+    |> assign(:form, to_form(Runs.change(%Run{})))
+  end
+
+  defp apply_action(socket, :edit, %{"id" => id}) do
+    run = Runs.get!(id)
+
+    prefill =
+      Runs.change(%Run{
+        name: run.name,
+        source_path: run.source_path,
+        label: run.label,
+        destination_id: run.destination_id
+      })
+
+    socket
+    |> assign(:page_title, "Reconfigure archive")
+    |> assign(:run, run)
+    |> assign(:form, to_form(prefill))
   end
 
   @impl true
@@ -32,6 +57,13 @@ defmodule FaeWeb.ArchiveLive.New do
   end
 
   def handle_event("save", %{"run" => attrs}, socket) do
+    case socket.assigns.live_action do
+      :new -> save_new(socket, attrs)
+      :edit -> save_edit(socket, attrs)
+    end
+  end
+
+  defp save_new(socket, attrs) do
     case Archive.start_archive(attrs) do
       {:ok, run} ->
         {:noreply,
@@ -47,12 +79,47 @@ defmodule FaeWeb.ArchiveLive.New do
     end
   end
 
+  defp save_edit(socket, attrs) do
+    case Archive.replace(socket.assigns.run.id, attrs) do
+      {:ok, run} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Archive reconfigured.")
+         |> push_navigate(to: ~p"/archive/#{run.id}")}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, :form, to_form(Map.put(changeset, :action, :insert)))}
+
+      {:error, :busy} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Can't reconfigure while a sync is running. Wait for it to finish."
+         )}
+
+      {:error, :not_found} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Archive no longer exists.")
+         |> push_navigate(to: ~p"/archive")}
+    end
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_path={@current_path}>
       <section class="card bg-base-200 p-6 space-y-4 max-w-2xl">
         <h2 class="text-xl font-semibold">{@page_title}</h2>
+
+        <div :if={@live_action == :edit} class="alert alert-warning text-sm">
+          <span>
+            Reconfiguring replaces this archive with a new one.
+            <strong>No files are deleted from the bucket.</strong>
+            If you change the source, remote folder, or destination, future syncs upload into the new location — the files already uploaded stay where they are. To just change the name, use Rename instead.
+          </span>
+        </div>
 
         <%= if @destinations == [] do %>
           <p class="opacity-75">
@@ -115,7 +182,9 @@ defmodule FaeWeb.ArchiveLive.New do
 
             <div class="flex justify-end gap-2 pt-2">
               <.link navigate={~p"/archive"} class="btn btn-ghost">Cancel</.link>
-              <button type="submit" class="btn btn-primary">Start archive</button>
+              <button type="submit" class="btn btn-primary">
+                {if @live_action == :edit, do: "Reconfigure", else: "Start archive"}
+              </button>
             </div>
           </.form>
         <% end %>

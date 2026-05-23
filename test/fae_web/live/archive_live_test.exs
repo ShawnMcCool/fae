@@ -122,4 +122,65 @@ defmodule FaeWeb.ArchiveLiveTest do
 
     assert Runs.get(run.id) == nil
   end
+
+  test "Rename on the show page updates the name in place", %{
+    conn: conn,
+    dest: dest,
+    source: source
+  } do
+    stub(DriverMock, :put_stream, fn _dest, _key, path, _opts ->
+      {:ok, %{byte_size: File.stat!(path).size, sha256: "s", etag: "e"}}
+    end)
+
+    {:ok, run} =
+      Archive.start_archive(%{
+        name: "Camera Backup",
+        source_path: source,
+        label: "Pics",
+        destination_id: dest.id
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/archive/#{run.id}")
+    view |> element("button", "Rename") |> render_click()
+
+    html = view |> form("form", run: %{name: "Family Photos"}) |> render_submit()
+    assert html =~ "Family Photos"
+    assert Runs.get(run.id).name == "Family Photos"
+  end
+
+  test "Reconfigure replaces the archive and lands on the new one", %{
+    conn: conn,
+    dest: dest,
+    source: source
+  } do
+    stub(DriverMock, :put_stream, fn _dest, _key, path, _opts ->
+      {:ok, %{byte_size: File.stat!(path).size, sha256: "s", etag: "e"}}
+    end)
+
+    {:ok, old} =
+      Archive.start_archive(%{
+        name: "Camera Backup",
+        source_path: source,
+        label: "Pics",
+        destination_id: dest.id
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/archive/#{old.id}/edit")
+
+    assert {:error, {:live_redirect, %{to: to}}} =
+             view
+             |> form("form",
+               run: %{
+                 name: "Camera Backup",
+                 source_path: source,
+                 label: "Videos",
+                 destination_id: dest.id
+               }
+             )
+             |> render_submit()
+
+    assert to =~ ~r"^/archive/"
+    refute to == "/archive/#{old.id}"
+    assert Runs.get(old.id) == nil
+  end
 end

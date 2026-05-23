@@ -94,4 +94,42 @@ defmodule Fae.Archive.RunsTest do
     assert_receive {:run_changed, run_id}
     assert run_id == run.id
   end
+
+  test "rename/2 updates the name in place and broadcasts", %{dest: dest, source: source} do
+    {:ok, run} = Runs.create(%{name: "Old", source_path: source, destination_id: dest.id})
+    :ok = Phoenix.PubSub.subscribe(Fae.PubSub, Topics.archive_runs())
+
+    assert {:ok, renamed} = Runs.rename(run, %{"name" => "New"})
+    assert renamed.id == run.id
+    assert renamed.name == "New"
+    assert_receive {:run_changed, run_id}
+    assert run_id == run.id
+  end
+
+  test "replace/2 creates a new run, deletes the old, and cascades its items",
+       %{dest: dest, source: source} do
+    {:ok, old} =
+      Runs.create(%{name: "Old", source_path: source, label: "A", destination_id: dest.id})
+
+    Fae.Archive.Items.insert_scanned(old.id, [
+      %{relative_path: "x", object_key: "k/x", byte_size: 1}
+    ])
+
+    assert [_] = Fae.Archive.Items.list_for_run(old.id)
+
+    assert {:ok, new} =
+             Runs.replace(old, %{
+               name: "New",
+               source_path: source,
+               label: "B",
+               destination_id: dest.id
+             })
+
+    assert new.id != old.id
+    assert new.name == "New"
+    assert new.label == "B"
+    assert Runs.get(old.id) == nil
+    assert Fae.Archive.Items.list_for_run(old.id) == []
+    assert Fae.Archive.Items.list_for_run(new.id) == []
+  end
 end

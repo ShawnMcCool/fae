@@ -75,4 +75,25 @@ defmodule Fae.Archive.RunTest do
     assert applied.source_path == tmp_dir
     assert applied.label == "Pictures Videos"
   end
+
+  describe "rename_changeset/2" do
+    test "requires a name" do
+      changeset = Run.rename_changeset(%Run{name: "old"}, %{name: ""})
+      assert "can't be blank" in errors_on(changeset).name
+    end
+
+    test "trims and accepts a new name" do
+      changeset = Run.rename_changeset(%Run{name: "old"}, %{name: "  New  "})
+      assert changeset.valid?
+      assert Ecto.Changeset.apply_changes(changeset).name == "New"
+    end
+
+    test "does not touch identity fields" do
+      changeset =
+        Run.rename_changeset(%Run{}, %{name: "X", source_path: "/whatever", label: "Y"})
+
+      refute Map.has_key?(changeset.changes, :source_path)
+      refute Map.has_key?(changeset.changes, :label)
+    end
+  end
 end

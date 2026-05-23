@@ -33,8 +33,9 @@ defmodule FaeWeb.Router do
 
       scope "/archive" do
         live "/", ArchiveLive.Index, :index
-        live "/new", ArchiveLive.New, :new
+        live "/new", ArchiveLive.Form, :new
         live "/:id", ArchiveLive.Show, :show
+        live "/:id/edit", ArchiveLive.Form, :edit
       end
     end
   end

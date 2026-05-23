@@ -76,6 +76,18 @@ defmodule Fae.Archive.Run do
     |> assoc_constraint(:destination)
   end
 
+  @doc """
+  Changeset for an in-place rename — the only safe mutation of an
+  existing archive, since `name` doesn't feed the object key. All other
+  changes go through the clone-and-replace ("Reconfigure") flow.
+  """
+  def rename_changeset(run, attrs) do
+    run
+    |> cast(attrs, [:name])
+    |> update_change(:name, &String.trim/1)
+    |> validate_required([:name])
+  end
+
   defp normalize_label(changeset) do
     case get_change(changeset, :label) do
       nil -> changeset

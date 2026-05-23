@@ -51,6 +51,49 @@ defmodule Fae.Archive.Runs do
     end
   end
 
+  @spec rename_change(Run.t(), map()) :: Ecto.Changeset.t()
+  def rename_change(run, attrs \\ %{}), do: Run.rename_changeset(run, attrs)
+
+  @doc "In-place, non-destructive rename (the `name` only)."
+  @spec rename(Run.t(), map()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
+  def rename(%Run{} = run, attrs) do
+    with {:ok, updated} <- run |> Run.rename_changeset(attrs) |> Repo.update() do
+      broadcast_changed(updated.id)
+      {:ok, updated}
+    end
+  end
+
+  @doc """
+  Replaces a run with a new one built from `attrs`, atomically: the new
+  run is inserted fresh (no item history) and the old run is deleted (its
+  items cascade away via the FK). Bucket objects are never touched — if
+  the source / remote folder / destination changed, the next sync uploads
+  into the new location and the old objects simply remain. Backs the
+  "Reconfigure" flow.
+  """
+  @spec replace(Run.t(), map()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
+  def replace(%Run{} = old, attrs) do
+    result =
+      Repo.transaction(fn ->
+        with {:ok, new_run} <- %Run{} |> Run.create_changeset(attrs) |> Repo.insert(),
+             {:ok, _deleted} <- Repo.delete(old) do
+          new_run
+        else
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+
+    case result do
+      {:ok, new_run} ->
+        broadcast_changed(old.id)
+        broadcast_changed(new_run.id)
+        {:ok, new_run}
+
+      {:error, _changeset} = error ->
+        error
+    end
+  end
+
   @spec mark_scanning(Run.t()) :: {:ok, Run.t()}
   def mark_scanning(%Run{} = run) do
     update_run(run, %{status: "scanning", started_at: DateTime.utc_now()})

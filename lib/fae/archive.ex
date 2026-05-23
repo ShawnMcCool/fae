@@ -41,6 +41,31 @@ defmodule Fae.Archive do
   end
 
   @doc """
+  Reconfigures an archive by replacing it: creates a new archive from
+  `attrs` and retires the old one (clone-and-replace). Refuses while a
+  sync is in flight. Bucket objects are not deleted; if the source,
+  remote folder, or destination changed, the next sync uploads into the
+  new location and the old objects remain where they are.
+  """
+  @spec replace(Ecto.UUID.t(), map()) :: {:ok, Run.t()} | {:error, term()}
+  def replace(old_run_id, attrs) do
+    case Runs.get(old_run_id) do
+      nil -> {:error, :not_found}
+      %Run{status: status} when status in ["scanning", "uploading"] -> {:error, :busy}
+      %Run{} = old -> Runs.replace(old, attrs)
+    end
+  end
+
+  @doc "In-place rename of an archive (the friendly name only)."
+  @spec rename(Ecto.UUID.t(), map()) :: {:ok, Run.t()} | {:error, term()}
+  def rename(run_id, attrs) do
+    case Runs.get(run_id) do
+      nil -> {:error, :not_found}
+      %Run{} = run -> Runs.rename(run, attrs)
+    end
+  end
+
+  @doc """
   Re-runs an archive: the worker re-scans the source (picking up files
   added since the last run) and uploads everything still pending,
   skipping files already uploaded. Failed items are reset to pending
