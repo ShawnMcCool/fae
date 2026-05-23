@@ -150,6 +150,42 @@ defmodule FaeWeb.BackupsLiveTest do
       assert html =~ job.slug
       assert html =~ "No runs yet"
     end
+
+    test "opens a view-only remote browser scoped to the job's prefix", %{conn: conn} do
+      Application.put_env(:fae, :storage_drivers, %{"s3" => DriverMock})
+      on_exit(fn -> Application.delete_env(:fae, :storage_drivers) end)
+
+      dest = create_destination!()
+      job = create_job!(dest, %{prefix: "Family", slug: "daily-db"})
+
+      # Expect a listing relative to the destination prefix at
+      # "<job.prefix>/<job.slug>/", i.e. "Family/daily-db/".
+      stub(DriverMock, :list_prefixes, fn _dest, prefix ->
+        assert prefix == "Family/daily-db/"
+
+        {:ok,
+         %{
+           prefixes: [],
+           files: [
+             %{
+               key: "Family/daily-db/2026-05-01.tar.gz",
+               size: 2048,
+               last_modified: ~U[2026-05-01 12:00:00Z]
+             }
+           ]
+         }}
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/backups/#{job.id}")
+
+      view |> element("button", "Browse backups") |> render_click()
+      html = render_async(view)
+
+      assert html =~ "2026-05-01.tar.gz"
+      assert html =~ "2.0 KiB"
+      # View-only: no selection affordance.
+      refute html =~ "Use this folder"
+    end
   end
 
   describe "DestinationForm new" do

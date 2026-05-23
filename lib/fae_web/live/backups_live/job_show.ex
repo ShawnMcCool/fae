@@ -9,6 +9,7 @@ defmodule FaeWeb.BackupsLive.JobShow do
 
   alias Fae.Backups
   alias Fae.Backups.{Jobs, Runs}
+  alias FaeWeb.PathBrowser
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -22,6 +23,7 @@ defmodule FaeWeb.BackupsLive.JobShow do
      socket
      |> assign(:page_title, job.name)
      |> assign(:job, job)
+     |> assign(:browser, nil)
      |> assign(:runs, Runs.list_recent(id, 50))}
   end
 
@@ -31,9 +33,25 @@ defmodule FaeWeb.BackupsLive.JobShow do
     {:noreply, refresh(socket)}
   end
 
+  def handle_event("open_browser", _params, socket) do
+    job = socket.assigns.job
+    start_rel = [job.prefix, job.slug] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join("/")
+
+    browser = %{
+      source: {:remote, job.destination, start_rel},
+      mode: :view,
+      show_files: true,
+      title: "Backups in #{job.name}",
+      return_to: nil
+    }
+
+    {:noreply, assign(socket, :browser, browser)}
+  end
+
   @impl true
   def handle_info({:run_started, _}, socket), do: {:noreply, refresh(socket)}
   def handle_info({:run_finished, _, _, _}, socket), do: {:noreply, refresh(socket)}
+  def handle_info({:path_browser, :closed}, socket), do: {:noreply, assign(socket, :browser, nil)}
   def handle_info(_, socket), do: {:noreply, socket}
 
   defp refresh(socket) do
@@ -54,6 +72,14 @@ defmodule FaeWeb.BackupsLive.JobShow do
           <div class="flex gap-2">
             <.link navigate={~p"/backups"} class="btn btn-sm btn-ghost">Back</.link>
             <.link navigate={~p"/backups/#{@job.id}/edit"} class="btn btn-sm btn-ghost">Edit</.link>
+            <button
+              :if={@job.destination}
+              type="button"
+              phx-click="open_browser"
+              class="btn btn-sm btn-ghost"
+            >
+              Browse backups
+            </button>
             <button
               type="button"
               phx-click="run_now"
@@ -121,6 +147,17 @@ defmodule FaeWeb.BackupsLive.JobShow do
           </div>
         <% end %>
       </section>
+
+      <.live_component
+        :if={@browser}
+        module={PathBrowser}
+        id="path-browser"
+        source={@browser.source}
+        mode={@browser.mode}
+        show_files={@browser.show_files}
+        title={@browser.title}
+        return_to={@browser.return_to}
+      />
     </Layouts.app>
     """
   end
