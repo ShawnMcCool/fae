@@ -267,6 +267,41 @@ defmodule Fae.Storage.Drivers.S3 do
   end
 
   @impl true
+  def list_prefixes(%Destination{} = dest, prefix) do
+    list_prefixes_paginated(dest, prefix, nil, [], [])
+  end
+
+  defp list_prefixes_paginated(dest, prefix, continuation, prefixes, keys) do
+    base = "#{bucket_url(dest)}/"
+
+    params =
+      [{"list-type", "2"}, {"delimiter", "/"}, {"prefix", prefix}]
+      |> add_continuation(continuation)
+
+    url = "#{base}?#{encode_query(params)}"
+    signed = sign(dest, "GET", url, base_headers(url), "")
+
+    case Req.get(url, headers: signed) do
+      {:ok, %Req.Response{status: 200, body: body}} ->
+        {page_prefixes, page_keys, next_token} = parse_prefixes(body)
+        prefixes = prefixes ++ page_prefixes
+        keys = keys ++ page_keys
+
+        if next_token do
+          list_prefixes_paginated(dest, prefix, next_token, prefixes, keys)
+        else
+          {:ok, %{prefixes: prefixes, keys: keys}}
+        end
+
+      {:ok, %Req.Response{status: status, body: response_body}} ->
+        {:error, {:s3_error, status, response_body}}
+
+      {:error, reason} ->
+        {:error, {:network, reason}}
+    end
+  end
+
+  @impl true
   def verify(%Destination{} = dest) do
     url = bucket_url(dest)
     headers = base_headers(url)
@@ -478,6 +513,29 @@ defmodule Fae.Storage.Drivers.S3 do
       |> Enum.join()
 
     "<CompleteMultipartUpload>#{body}</CompleteMultipartUpload>"
+  end
+
+  # One-level (delimiter=/) listing: CommonPrefixes are the sub-folders,
+  # Contents are the files at this level.
+  @doc false
+  def parse_prefixes(xml) when is_binary(xml) do
+    prefixes =
+      ~r{<CommonPrefixes>.*?<Prefix>(.*?)</Prefix>.*?</CommonPrefixes>}s
+      |> Regex.scan(xml, capture: :all_but_first)
+      |> Enum.map(fn [prefix] -> prefix end)
+
+    keys =
+      ~r{<Contents>.*?<Key>(.*?)</Key>.*?</Contents>}s
+      |> Regex.scan(xml, capture: :all_but_first)
+      |> Enum.map(fn [key] -> key end)
+
+    next_token =
+      case Regex.run(~r{<NextContinuationToken>(.*?)</NextContinuationToken>}s, xml) do
+        [_, token] -> token
+        _ -> nil
+      end
+
+    {prefixes, keys, next_token}
   end
 
   # S3 ListObjectsV2 XML parsing. The output schema is stable; using

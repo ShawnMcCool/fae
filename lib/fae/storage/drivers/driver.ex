@@ -46,6 +46,15 @@ defmodule Fae.Storage.Drivers.Driver do
   @callback list(Destination.t(), prefix :: String.t()) ::
               {:ok, [object()]} | {:error, term()}
 
+  @doc """
+  Lists a single level of the keyspace under `prefix` using
+  `delimiter=/`: the immediate sub-folders (`prefixes`, from S3
+  CommonPrefixes) and the files at this level (`keys`). Powers the
+  destination folder picker.
+  """
+  @callback list_prefixes(Destination.t(), prefix :: String.t()) ::
+              {:ok, %{prefixes: [String.t()], keys: [String.t()]}} | {:error, term()}
+
   @callback delete(Destination.t(), key :: String.t()) ::
               :ok | {:error, term()}
 

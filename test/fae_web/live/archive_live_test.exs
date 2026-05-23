@@ -183,4 +183,42 @@ defmodule FaeWeb.ArchiveLiveTest do
     refute to == "/archive/#{old.id}"
     assert Runs.get(old.id) == nil
   end
+
+  test "the local folder picker browses and fills the Source field", %{conn: conn, source: source} do
+    File.mkdir_p!(Path.join(source, "sub"))
+
+    {:ok, view, _html} = live(conn, ~p"/archive/new")
+    # Point the source at the tmp dir so the picker starts there.
+    view |> form("form", run: %{source_path: source}) |> render_change()
+
+    view |> element("button[title='Browse local folders']") |> render_click()
+    assert render_async(view) =~ "sub"
+
+    view |> element("button[phx-value-name='sub']") |> render_click()
+    render_async(view)
+    view |> element("button", "Use this folder") |> render_click()
+
+    assert render(view) =~ ~s(value="#{Path.join(source, "sub")}")
+  end
+
+  test "the remote folder picker browses the destination and fills the Remote folder", %{
+    conn: conn,
+    dest: dest
+  } do
+    stub(DriverMock, :list_prefixes, fn _dest, _prefix ->
+      {:ok, %{prefixes: ["Pictures Videos/"], keys: []}}
+    end)
+
+    {:ok, view, _html} = live(conn, ~p"/archive/new")
+    view |> form("form", run: %{destination_id: dest.id}) |> render_change()
+
+    view |> element("button[title='Browse the destination']") |> render_click()
+    assert render_async(view) =~ "Pictures Videos"
+
+    view |> element("button[phx-value-name='Pictures Videos']") |> render_click()
+    render_async(view)
+    view |> element("button", "Use this folder") |> render_click()
+
+    assert render(view) =~ ~s(value="Pictures Videos")
+  end
 end

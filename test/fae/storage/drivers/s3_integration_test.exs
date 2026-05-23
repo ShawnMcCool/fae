@@ -101,6 +101,25 @@ defmodule Fae.Storage.Drivers.S3IntegrationTest do
     assert Enum.any?(objects, &(&1.key == key))
   end
 
+  @tag :tmp_dir
+  test "list_prefixes returns one level of folders and files", %{dest: dest, tmp_dir: tmp_dir} do
+    path = Path.join(tmp_dir, "f")
+    File.write!(path, "1")
+
+    {:ok, _} = S3.put_stream(dest, "lp/top.txt", path, [])
+    {:ok, _} = S3.put_stream(dest, "lp/a/x.txt", path, [])
+    {:ok, _} = S3.put_stream(dest, "lp/a/b/y.txt", path, [])
+
+    {:ok, %{prefixes: prefixes, keys: keys}} = S3.list_prefixes(dest, "lp/")
+    assert "lp/a/" in prefixes
+    assert "lp/top.txt" in keys
+    # Nested entries are NOT flattened into this level.
+    refute "lp/a/x.txt" in keys
+
+    {:ok, %{prefixes: sub_prefixes}} = S3.list_prefixes(dest, "lp/a/")
+    assert "lp/a/b/" in sub_prefixes
+  end
+
   # CreateBucket via a signed PUT on the bucket URL. 409 means the
   # bucket already exists and is owned by us — fine to proceed.
   defp ensure_bucket(%Destination{} = dest) do

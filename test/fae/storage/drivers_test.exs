@@ -113,4 +113,41 @@ defmodule Fae.Storage.DriversTest do
                ~s(<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>"a"</ETag></Part><Part><PartNumber>2</PartNumber><ETag>"b"</ETag></Part></CompleteMultipartUpload>)
     end
   end
+
+  describe "S3.parse_prefixes/1" do
+    @delimited_xml """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <ListBucketResult>
+      <Name>bucket</Name>
+      <Prefix>Family/</Prefix>
+      <Delimiter>/</Delimiter>
+      <IsTruncated>false</IsTruncated>
+      <Contents>
+        <Key>Family/readme.txt</Key>
+        <Size>3</Size>
+      </Contents>
+      <CommonPrefixes><Prefix>Family/Pictures Videos/</Prefix></CommonPrefixes>
+      <CommonPrefixes><Prefix>Family/Documents/</Prefix></CommonPrefixes>
+    </ListBucketResult>
+    """
+
+    test "extracts common prefixes (folders) and keys (files) at one level" do
+      {prefixes, keys, next_token} = S3.parse_prefixes(@delimited_xml)
+      assert prefixes == ["Family/Pictures Videos/", "Family/Documents/"]
+      assert keys == ["Family/readme.txt"]
+      assert next_token == nil
+    end
+
+    test "extracts the continuation token when truncated" do
+      truncated =
+        String.replace(
+          @delimited_xml,
+          "<IsTruncated>false</IsTruncated>",
+          "<IsTruncated>true</IsTruncated><NextContinuationToken>tok-1</NextContinuationToken>"
+        )
+
+      {_prefixes, _keys, next_token} = S3.parse_prefixes(truncated)
+      assert next_token == "tok-1"
+    end
+  end
 end
