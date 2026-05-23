@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# bin/deploy — build the current code and (re)install it as the running
+# systemd user service. The one-shot local dev deploy: equivalent to
+# `bin/build && bin/install`, ending with fae restarted onto the
+# just-built release.
+#
+# This does NOT bump the version or publish anything — for a real,
+# self-update-able GitHub release use bin/ship.
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+bin/build
+bin/install
