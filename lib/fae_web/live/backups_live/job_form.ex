@@ -30,12 +30,8 @@ defmodule FaeWeb.BackupsLive.JobForm do
     socket
     |> assign(:page_title, "New backup job")
     |> assign(:job, job)
+    |> assign_retention_defaults()
     |> assign(:retention_strategy, "keep_last_n")
-    |> assign(:retention_n, 30)
-    |> assign(:retention_days, 30)
-    |> assign(:retention_gfs_daily, 7)
-    |> assign(:retention_gfs_weekly, 4)
-    |> assign(:retention_gfs_monthly, 12)
     |> assign(:form, to_form(Jobs.change(job, %{})))
   end
 
@@ -49,35 +45,48 @@ defmodule FaeWeb.BackupsLive.JobForm do
     |> assign(:form, to_form(Jobs.change(job, %{})))
   end
 
-  defp assign_retention_from(socket, %Job{
+  # Every retention input always gets a value, so the validate path
+  # (assign_retention_params_inputs/2) and the template can safely read
+  # any retention_* assign regardless of the active strategy.
+  defp assign_retention_defaults(socket) do
+    socket
+    |> assign(:retention_n, 30)
+    |> assign(:retention_days, 30)
+    |> assign(:retention_gfs_daily, 7)
+    |> assign(:retention_gfs_weekly, 4)
+    |> assign(:retention_gfs_monthly, 12)
+  end
+
+  defp assign_retention_from(socket, %Job{} = job) do
+    socket
+    |> assign_retention_defaults()
+    |> assign(:retention_strategy, job.retention_strategy || "keep_last_n")
+    |> assign_retention_overrides(job)
+  end
+
+  defp assign_retention_overrides(socket, %Job{
          retention_strategy: "keep_last_n",
          retention_params: %{"n" => n}
        }),
-       do: socket |> assign(:retention_strategy, "keep_last_n") |> assign(:retention_n, n)
+       do: assign(socket, :retention_n, n)
 
-  defp assign_retention_from(socket, %Job{
+  defp assign_retention_overrides(socket, %Job{
          retention_strategy: "keep_for_days",
          retention_params: %{"days" => d}
        }),
-       do: socket |> assign(:retention_strategy, "keep_for_days") |> assign(:retention_days, d)
+       do: assign(socket, :retention_days, d)
 
-  defp assign_retention_from(socket, %Job{retention_strategy: "gfs", retention_params: params}) do
+  defp assign_retention_overrides(socket, %Job{
+         retention_strategy: "gfs",
+         retention_params: params
+       }) do
     socket
-    |> assign(:retention_strategy, "gfs")
-    |> assign(:retention_gfs_daily, params["daily"])
-    |> assign(:retention_gfs_weekly, params["weekly"])
-    |> assign(:retention_gfs_monthly, params["monthly"])
+    |> assign(:retention_gfs_daily, params["daily"] || 7)
+    |> assign(:retention_gfs_weekly, params["weekly"] || 4)
+    |> assign(:retention_gfs_monthly, params["monthly"] || 12)
   end
 
-  defp assign_retention_from(socket, _),
-    do:
-      socket
-      |> assign(:retention_strategy, "keep_last_n")
-      |> assign(:retention_n, 30)
-      |> assign(:retention_days, 30)
-      |> assign(:retention_gfs_daily, 7)
-      |> assign(:retention_gfs_weekly, 4)
-      |> assign(:retention_gfs_monthly, 12)
+  defp assign_retention_overrides(socket, _job), do: socket
 
   @impl true
   def handle_event("validate", %{"job" => attrs}, socket) do

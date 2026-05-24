@@ -149,6 +149,53 @@ defmodule FaeWeb.BackupsLiveTest do
     end
   end
 
+  describe "JobForm edit" do
+    # Regression: editing a job whose strategy isn't keep_last_n then
+    # triggering validate crashed with `KeyError key :retention_n` because
+    # the edit mount only assigned the active strategy's retention input,
+    # while the validate path reads every retention_* assign as a fallback.
+    test "editing a keep_for_days job and validating does not crash", %{conn: conn} do
+      dest = create_destination!()
+
+      job =
+        create_job!(dest, %{
+          retention_strategy: "keep_for_days",
+          retention_params: %{"days" => 14}
+        })
+
+      {:ok, view, html} = live(conn, ~p"/backups/#{job.id}/edit")
+      assert html =~ "Edit backup job"
+
+      html = view |> form("form", job: %{"name" => "Renamed Job"}) |> render_change()
+      assert html =~ ~s(name="job[retention_days]")
+    end
+
+    test "editing a gfs job and validating does not crash", %{conn: conn} do
+      dest = create_destination!()
+
+      job =
+        create_job!(dest, %{
+          retention_strategy: "gfs",
+          retention_params: %{"daily" => 7, "weekly" => 4, "monthly" => 12}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/backups/#{job.id}/edit")
+
+      html = view |> form("form", job: %{"name" => "Renamed Job"}) |> render_change()
+      assert html =~ "Daily buckets"
+    end
+
+    test "editing a keep_last_n job and validating does not crash", %{conn: conn} do
+      dest = create_destination!()
+      job = create_job!(dest, %{retention_strategy: "keep_last_n", retention_params: %{"n" => 5}})
+
+      {:ok, view, _html} = live(conn, ~p"/backups/#{job.id}/edit")
+
+      html = view |> form("form", job: %{"name" => "Renamed Job"}) |> render_change()
+      assert html =~ ~s(name="job[retention_n]")
+    end
+  end
+
   describe "JobShow" do
     test "renders job details and an empty run history", %{conn: conn} do
       dest = create_destination!()
