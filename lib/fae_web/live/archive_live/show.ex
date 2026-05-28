@@ -145,10 +145,25 @@ defmodule FaeWeb.ArchiveLive.Show do
           </div>
           <div class="flex gap-2">
             <.link navigate={~p"/archive"} class="btn btn-sm btn-ghost">Back</.link>
-            <button type="button" phx-click="sync" class="btn btn-sm btn-primary">Sync now</button>
+            <button
+              :if={@run.kind == "standard"}
+              type="button"
+              phx-click="sync"
+              class="btn btn-sm btn-primary"
+            >
+              Sync now
+            </button>
+            <button
+              :if={@run.kind == "quick" and @run.status not in ["scanning", "uploading"]}
+              type="button"
+              phx-click="sync"
+              class="btn btn-sm btn-primary"
+            >
+              Retry
+            </button>
             <button type="button" phx-click="open_rename" class="btn btn-sm btn-ghost">Rename</button>
             <.link
-              :if={@run.status not in ["scanning", "uploading"]}
+              :if={@run.kind == "standard" and @run.status not in ["scanning", "uploading"]}
               navigate={~p"/archive/#{@run.id}/edit"}
               class="btn btn-sm btn-ghost"
             >

@@ -1,6 +1,6 @@
-defmodule FaeWeb.BackupsLive.DestinationForm do
+defmodule FaeWeb.DestinationsLive.Form do
   @moduledoc """
-  Create or edit a backup destination.
+  Create or edit a storage destination.
   """
 
   use FaeWeb, :live_view
@@ -51,7 +51,7 @@ defmodule FaeWeb.BackupsLive.DestinationForm do
         {:noreply,
          socket
          |> put_flash(:info, "Destination created.")
-         |> push_navigate(to: ~p"/backups/destinations")}
+         |> push_navigate(to: ~p"/destinations")}
 
       {:error, changeset} ->
         {:noreply,
@@ -67,7 +67,7 @@ defmodule FaeWeb.BackupsLive.DestinationForm do
         {:noreply,
          socket
          |> put_flash(:info, "Destination updated.")
-         |> push_navigate(to: ~p"/backups/destinations")}
+         |> push_navigate(to: ~p"/destinations")}
 
       {:error, changeset} ->
         {:noreply,
@@ -160,6 +160,19 @@ defmodule FaeWeb.BackupsLive.DestinationForm do
           </div>
 
           <div>
+            <label class="label">Quick Archive subfolder (optional)</label>
+            <.input
+              field={@form[:quick_archive_prefix]}
+              type="text"
+              placeholder="archive"
+              class="input input-bordered w-full font-mono"
+            />
+            <p class="text-xs opacity-60 mt-1">
+              Where Quick Archive drops its dated folders, under the path prefix — keeps one-shot dumps out of your curated archive layout. Leave blank to drop them straight under the path prefix.
+            </p>
+          </div>
+
+          <div>
             <label class="label">Access key ID</label>
             <.input
               field={@form[:access_key_id]}
@@ -178,7 +191,7 @@ defmodule FaeWeb.BackupsLive.DestinationForm do
           </div>
 
           <div class="flex justify-end gap-2 pt-2">
-            <.link navigate={~p"/backups/destinations"} class="btn btn-ghost">Cancel</.link>
+            <.link navigate={~p"/destinations"} class="btn btn-ghost">Cancel</.link>
             <button type="submit" class="btn btn-primary" phx-disable-with="Verifying…">
               Save
             </button>

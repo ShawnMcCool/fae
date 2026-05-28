@@ -22,6 +22,7 @@ defmodule Fae.Archive.Run do
   @type t :: %__MODULE__{
           id: Ecto.UUID.t() | nil,
           name: String.t(),
+          kind: String.t(),
           source_path: String.t() | nil,
           label: String.t(),
           status: String.t(),
@@ -41,6 +42,9 @@ defmodule Fae.Archive.Run do
 
   schema "archive_runs" do
     field :name, :string, default: ""
+    # "standard" (curated, content-dated, reconfigurable) or "quick"
+    # (one-shot, upload-dated — `label` carries the dated folder path).
+    field :kind, :string, default: "standard"
     field :source_path, :string
     # The remote folder segment of the object key (after the
     # destination's path_prefix). May contain slashes.
@@ -71,6 +75,28 @@ defmodule Fae.Archive.Run do
     |> update_change(:name, &String.trim/1)
     |> update_change(:source_path, &String.trim/1)
     |> normalize_label()
+    |> validate_required([:name, :source_path, :destination_id])
+    |> validate_source_directory()
+    |> assoc_constraint(:destination)
+  end
+
+  @doc """
+  Form changeset for a quick archive: one-shot, upload-dated. Validates
+  only the operator-facing fields — `name` (the label text, shown in the
+  list), `source_path`, and `destination_id`. `kind` is forced to `quick`.
+
+  The `label` (the dated folder path
+  `<quick_archive_prefix>/<YYYY>/<YYYY-MM-DD>-<slug>`) is *not* a form
+  field: `Fae.Archive` computes it from the name + destination + today and
+  puts it on the record at insert time, so the worker's existing key path
+  needs no quick-specific branch.
+  """
+  def quick_form_changeset(run, attrs) do
+    run
+    |> cast(attrs, [:name, :source_path, :destination_id])
+    |> put_change(:kind, "quick")
+    |> update_change(:name, &String.trim/1)
+    |> update_change(:source_path, &String.trim/1)
     |> validate_required([:name, :source_path, :destination_id])
     |> validate_source_directory()
     |> assoc_constraint(:destination)

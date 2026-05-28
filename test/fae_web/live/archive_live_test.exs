@@ -221,4 +221,147 @@ defmodule FaeWeb.ArchiveLiveTest do
 
     assert render(view) =~ ~s(value="Pictures Videos")
   end
+
+  describe "Quick Archive" do
+    defp stub_uploads do
+      stub(DriverMock, :put_stream, fn _dest, _key, path, _opts ->
+        {:ok, %{byte_size: File.stat!(path).size, sha256: "sha", etag: ~s("e")}}
+      end)
+    end
+
+    test "index links to the Quick Archive form", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/archive")
+      assert view |> element("a", "Quick Archive") |> has_element?()
+    end
+
+    test "the quick form rejects a non-existent source path", %{conn: conn, dest: dest} do
+      {:ok, view, _html} = live(conn, ~p"/archive/quick/new")
+
+      html =
+        view
+        |> form("form",
+          quick: %{name: "Cam", source_path: "/no/such/dir", destination_id: dest.id}
+        )
+        |> render_change()
+
+      assert html =~ "is not an existing directory"
+    end
+
+    test "previews the dated folder path as the operator types", %{conn: conn} do
+      {:ok, dest} =
+        Destinations.create(%{
+          name: "Dest #{System.unique_integer([:positive])}",
+          driver: "s3",
+          endpoint_url: "https://example.com",
+          region: "us",
+          bucket: "b",
+          path_prefix: "Family Backups",
+          quick_archive_prefix: "archive",
+          access_key_id: "k",
+          secret_access_key: "s"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/archive/quick/new")
+
+      html =
+        view
+        |> form("form", quick: %{name: "My Camera Backup", destination_id: dest.id})
+        |> render_change()
+
+      year = Date.utc_today().year
+      assert html =~ "Family Backups/archive/#{year}/"
+      assert html =~ "my-camera-backup"
+    end
+
+    test "creating a quick archive runs it inline and lands on a completed, dated run", %{
+      conn: conn,
+      dest: dest,
+      source: source
+    } do
+      stub_uploads()
+
+      {:ok, view, _html} = live(conn, ~p"/archive/quick/new")
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view
+               |> form("form",
+                 quick: %{name: "My Camera Backup", source_path: source, destination_id: dest.id}
+               )
+               |> render_submit()
+
+      "/archive/" <> id = to
+      run = Runs.get(id)
+      assert run.kind == "quick"
+      assert run.name == "My Camera Backup"
+
+      today = Date.to_iso8601(Date.utc_today())
+      assert run.label =~ ~r"/#{today}-my-camera-backup$"
+      assert Runs.get(id).status == "completed"
+
+      {:ok, show, _html} = live(conn, to)
+      assert show |> element("h2", "My Camera Backup") |> has_element?()
+    end
+
+    test "rejects a name with nothing slug-worthy", %{conn: conn, dest: dest, source: source} do
+      {:ok, view, _html} = live(conn, ~p"/archive/quick/new")
+
+      html =
+        view
+        |> form("form", quick: %{name: "!!! ???", source_path: source, destination_id: dest.id})
+        |> render_submit()
+
+      assert html =~ "letter or number"
+    end
+
+    test "rejects a same-day collision and links to the existing run", %{
+      conn: conn,
+      dest: dest,
+      source: source
+    } do
+      stub_uploads()
+
+      {:ok, existing} =
+        Archive.start_quick_archive(%{
+          "name" => "My Camera Backup",
+          "source_path" => source,
+          "destination_id" => dest.id
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/archive/quick/new")
+
+      html =
+        view
+        |> form("form",
+          quick: %{name: "My Camera Backup", source_path: source, destination_id: dest.id}
+        )
+        |> render_submit()
+
+      assert html =~ "already"
+      assert html =~ ~p"/archive/#{existing.id}"
+    end
+
+    test "index badges quick runs; show page action set differs from standard", %{
+      conn: conn,
+      dest: dest,
+      source: source
+    } do
+      stub_uploads()
+
+      {:ok, run} =
+        Archive.start_quick_archive(%{
+          "name" => "My Camera Backup",
+          "source_path" => source,
+          "destination_id" => dest.id
+        })
+
+      {:ok, index, _html} = live(conn, ~p"/archive")
+      assert index |> element("#run-#{run.id} .badge", "quick") |> has_element?()
+
+      {:ok, show, _html} = live(conn, ~p"/archive/#{run.id}")
+      refute show |> element("button", "Sync now") |> has_element?()
+      refute show |> element("a", "Reconfigure") |> has_element?()
+      assert show |> element("button", "Retry") |> has_element?()
+      assert show |> element("button", "Rename") |> has_element?()
+    end
+  end
 end

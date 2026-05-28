@@ -13,6 +13,7 @@ defmodule Fae.Archive.IntegrationTest do
   @moduletag :integration
   @moduletag :tmp_dir
 
+  alias Fae.Archive
   alias Fae.Archive.ArchiveWorker
   alias Fae.Archive.Items
   alias Fae.Archive.Runs
@@ -78,6 +79,33 @@ defmodule Fae.Archive.IntegrationTest do
     assert "Family Backups (IMPORTANT)/Pictures Videos/2004/big.bin" in keys
 
     assert "Family Backups (IMPORTANT)/Pictures Videos/2004/2004-04-15 family reunion/note.txt" in keys
+  end
+
+  test "quick archive uploads under a dated key and finalizes completed", %{
+    dest: dest,
+    tmp_dir: source
+  } do
+    assert {:ok, run} =
+             Archive.start_quick_archive(
+               %{
+                 "name" => "My Camera Backup",
+                 "source_path" => source,
+                 "destination_id" => dest.id
+               },
+               ~D[2026-05-28]
+             )
+
+    run = Runs.get(run.id)
+    assert run.kind == "quick"
+    assert run.status == "completed"
+    assert run.failed_files == 0
+
+    base = "Family Backups (IMPORTANT)/2026/2026-05-28-my-camera-backup/"
+    {:ok, objects} = S3.list(dest, base)
+    keys = Enum.map(objects, & &1.key)
+
+    assert (base <> "2004/big.bin") in keys
+    assert (base <> "2004/2004-04-15 family reunion/note.txt") in keys
   end
 
   defp ensure_bucket(%Destination{} = dest) do

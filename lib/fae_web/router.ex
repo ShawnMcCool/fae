@@ -25,9 +25,6 @@ defmodule FaeWeb.Router do
       scope "/backups" do
         live "/", BackupsLive.Index, :index
         live "/new", BackupsLive.JobForm, :new
-        live "/destinations", BackupsLive.DestinationsIndex, :index
-        live "/destinations/new", BackupsLive.DestinationForm, :new
-        live "/destinations/:id/edit", BackupsLive.DestinationForm, :edit
         live "/:id", BackupsLive.JobShow, :show
         live "/:id/edit", BackupsLive.JobForm, :edit
       end
@@ -35,8 +32,18 @@ defmodule FaeWeb.Router do
       scope "/archive" do
         live "/", ArchiveLive.Index, :index
         live "/new", ArchiveLive.Form, :new
+        live "/quick/new", ArchiveLive.QuickForm, :new
         live "/:id", ArchiveLive.Show, :show
         live "/:id/edit", ArchiveLive.Form, :edit
+      end
+
+      # Destinations are shared infrastructure (both Backups and Archive
+      # write to them), so they live at the top level rather than under
+      # any single tool.
+      scope "/destinations" do
+        live "/", DestinationsLive.Index, :index
+        live "/new", DestinationsLive.Form, :new
+        live "/:id/edit", DestinationsLive.Form, :edit
       end
     end
   end

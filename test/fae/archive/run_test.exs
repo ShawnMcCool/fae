@@ -76,6 +76,79 @@ defmodule Fae.Archive.RunTest do
     assert applied.label == "Pictures Videos"
   end
 
+  describe "quick_form_changeset/2" do
+    @tag :tmp_dir
+    test "valid attrs produce a valid quick changeset", %{tmp_dir: tmp_dir} do
+      changeset =
+        Run.quick_form_changeset(%Run{}, %{
+          name: "My Camera Backup",
+          source_path: tmp_dir,
+          destination_id: Ecto.UUID.generate()
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.apply_changes(changeset).kind == "quick"
+    end
+
+    @tag :tmp_dir
+    test "forces kind to quick even if attrs say otherwise", %{tmp_dir: tmp_dir} do
+      changeset =
+        Run.quick_form_changeset(%Run{}, %{
+          name: "X",
+          source_path: tmp_dir,
+          destination_id: Ecto.UUID.generate(),
+          kind: "standard"
+        })
+
+      assert Ecto.Changeset.apply_changes(changeset).kind == "quick"
+    end
+
+    test "name, source_path, and destination_id are required" do
+      changeset = Run.quick_form_changeset(%Run{}, %{})
+      assert "can't be blank" in errors_on(changeset).name
+      assert "can't be blank" in errors_on(changeset).source_path
+      assert "can't be blank" in errors_on(changeset).destination_id
+    end
+
+    test "does not treat label as a form field" do
+      changeset =
+        Run.quick_form_changeset(%Run{}, %{
+          name: "X",
+          source_path: "/tmp",
+          destination_id: Ecto.UUID.generate(),
+          label: "operator/should/not/set/this"
+        })
+
+      refute Map.has_key?(changeset.changes, :label)
+    end
+
+    test "rejects a source_path that is not an existing directory" do
+      changeset =
+        Run.quick_form_changeset(%Run{}, %{
+          name: "X",
+          source_path: "/no/such/directory/anywhere",
+          destination_id: Ecto.UUID.generate()
+        })
+
+      assert "is not an existing directory" in errors_on(changeset).source_path
+    end
+
+    @tag :tmp_dir
+    test "trims surrounding whitespace on name and source_path", %{tmp_dir: tmp_dir} do
+      changeset =
+        Run.quick_form_changeset(%Run{}, %{
+          name: "  My Camera Backup  ",
+          source_path: "  #{tmp_dir}  ",
+          destination_id: Ecto.UUID.generate()
+        })
+
+      assert changeset.valid?
+      applied = Ecto.Changeset.apply_changes(changeset)
+      assert applied.name == "My Camera Backup"
+      assert applied.source_path == tmp_dir
+    end
+  end
+
   describe "rename_changeset/2" do
     test "requires a name" do
       changeset = Run.rename_changeset(%Run{name: "old"}, %{name: ""})

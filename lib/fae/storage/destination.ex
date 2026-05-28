@@ -40,6 +40,7 @@ defmodule Fae.Storage.Destination do
           bucket: String.t() | nil,
           force_path_style: boolean(),
           path_prefix: String.t(),
+          quick_archive_prefix: String.t() | nil,
           access_key_id: String.t() | nil,
           secret_access_key: String.t() | nil,
           inserted_at: DateTime.t() | nil,
@@ -54,6 +55,9 @@ defmodule Fae.Storage.Destination do
     field :bucket, :string
     field :force_path_style, :boolean, default: false
     field :path_prefix, :string, default: ""
+    # Optional folder under path_prefix for Quick Archive's dated dumps;
+    # nil/blank drops them straight under path_prefix.
+    field :quick_archive_prefix, :string
     field :access_key_id, :string
     field :secret_access_key, :string
 
@@ -61,7 +65,7 @@ defmodule Fae.Storage.Destination do
   end
 
   @required ~w(name driver endpoint_url region bucket access_key_id secret_access_key)a
-  @optional ~w(force_path_style path_prefix)a
+  @optional ~w(force_path_style path_prefix quick_archive_prefix)a
 
   def changeset(destination, attrs) do
     destination
@@ -72,6 +76,7 @@ defmodule Fae.Storage.Destination do
       message: "must start with http:// or https://"
     )
     |> normalize_path_prefix()
+    |> normalize_quick_archive_prefix()
     |> unique_constraint(:name)
   end
 
@@ -83,6 +88,21 @@ defmodule Fae.Storage.Destination do
       value ->
         normalized = value |> to_string() |> String.trim() |> String.trim("/")
         put_change(changeset, :path_prefix, normalized)
+    end
+  end
+
+  # Like path_prefix, but the column is nullable: a blank value normalizes
+  # to nil ("no quick-archive subfolder; drop straight under path_prefix").
+  defp normalize_quick_archive_prefix(changeset) do
+    case get_change(changeset, :quick_archive_prefix) do
+      nil ->
+        changeset
+
+      value ->
+        case value |> to_string() |> String.trim() |> String.trim("/") do
+          "" -> put_change(changeset, :quick_archive_prefix, nil)
+          normalized -> put_change(changeset, :quick_archive_prefix, normalized)
+        end
     end
   end
 

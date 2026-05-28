@@ -17,11 +17,15 @@ defmodule FaeWeb.SidebarTest do
       assert SidebarNav.active?("/backups/abc-uuid/edit", "/backups")
     end
 
-    test "longer prefixes win when two items both match" do
-      # /backups/destinations and /backups both prefix-match
-      # /backups/destinations — only the more specific one lights up.
-      refute SidebarNav.active?("/backups/destinations", "/backups")
-      assert SidebarNav.active?("/backups/destinations", "/backups/destinations")
+    test "destinations highlights across its own subtree, never another item" do
+      assert SidebarNav.active?("/destinations", "/destinations")
+      assert SidebarNav.active?("/destinations/new", "/destinations")
+      assert SidebarNav.active?("/destinations/abc-uuid/edit", "/destinations")
+
+      # Destinations and Backups are independent top-level routes now —
+      # neither lights the other.
+      refute SidebarNav.active?("/destinations", "/backups")
+      refute SidebarNav.active?("/backups", "/destinations")
     end
 
     test "rejects partial-segment matches" do
@@ -35,15 +39,34 @@ defmodule FaeWeb.SidebarTest do
     end
   end
 
+  describe "SidebarNav.groups/1" do
+    defp paths_in(groups) do
+      groups |> Enum.flat_map(& &1.items) |> Enum.map(& &1.path)
+    end
+
+    test "top groups carry the dashboard, tools, and shared destinations" do
+      paths = paths_in(SidebarNav.groups(:top))
+      assert "/" in paths
+      assert "/backups" in paths
+      assert "/archive" in paths
+      assert "/destinations" in paths
+      refute "/update" in paths
+      refute "/settings" in paths
+    end
+
+    test "bottom groups are exactly the system chrome, in order" do
+      assert paths_in(SidebarNav.groups(:bottom)) == ["/update", "/settings"]
+    end
+  end
+
   describe "sidebar rendering" do
-    test "renders the icon rail on the dashboard", %{conn: conn} do
+    test "renders the icon rail with every nav target on the dashboard", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/")
       assert html =~ ~s|data-role="sidebar"|
-      # All three top-level nav targets appear as links.
-      assert html =~ ~s|data-path="/"|
-      assert html =~ ~s|data-path="/backups"|
-      assert html =~ ~s|data-path="/backups/destinations"|
-      assert html =~ ~s|data-path="/update"|
+
+      for path <- ~w(/ /backups /archive /destinations /update /settings) do
+        assert html =~ ~s|data-path="#{path}"|
+      end
     end
 
     test "dashboard link is active on /", %{conn: conn} do
@@ -55,12 +78,12 @@ defmodule FaeWeb.SidebarTest do
       {:ok, _view, html} = live(conn, ~p"/backups")
       assert html =~ ~s|data-active="true" data-path="/backups"|
       # Destinations should NOT be active when on the jobs index.
-      refute html =~ ~s|data-active="true" data-path="/backups/destinations"|
+      refute html =~ ~s|data-active="true" data-path="/destinations"|
     end
 
-    test "destinations link is active on /backups/destinations, jobs is not", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/backups/destinations")
-      assert html =~ ~s|data-active="true" data-path="/backups/destinations"|
+    test "destinations link is active on /destinations, jobs is not", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/destinations")
+      assert html =~ ~s|data-active="true" data-path="/destinations"|
       assert html =~ ~s|data-active="false" data-path="/backups"|
     end
 
@@ -70,6 +93,32 @@ defmodule FaeWeb.SidebarTest do
       assert html =~ ~s|data-tip="Backup jobs"|
       assert html =~ ~s|data-tip="Destinations"|
       assert html =~ ~s|data-tip="Updates"|
+    end
+  end
+
+  describe "rail zones" do
+    defp in_zone?(view, zone, path) do
+      has_element?(view, ~s|[data-role="#{zone}"] [data-path="#{path}"]|)
+    end
+
+    test "dashboard, tools, and destinations sit in the top zone", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      for path <- ~w(/ /backups /archive /destinations) do
+        assert in_zone?(view, "sidebar-top", path)
+      end
+
+      refute in_zone?(view, "sidebar-top", "/update")
+      refute in_zone?(view, "sidebar-top", "/settings")
+    end
+
+    test "updates and settings are pinned to the bottom zone", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      assert in_zone?(view, "sidebar-bottom", "/update")
+      assert in_zone?(view, "sidebar-bottom", "/settings")
+      refute in_zone?(view, "sidebar-bottom", "/backups")
+      refute in_zone?(view, "sidebar-bottom", "/destinations")
     end
   end
 
@@ -100,7 +149,7 @@ defmodule FaeWeb.SidebarTest do
       {:ok, _, html_backups} = live(conn, ~p"/backups")
       assert html_backups =~ title_re.("Backup jobs")
 
-      {:ok, _, html_destinations} = live(conn, ~p"/backups/destinations")
+      {:ok, _, html_destinations} = live(conn, ~p"/destinations")
       assert html_destinations =~ title_re.("Destinations")
     end
   end

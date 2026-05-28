@@ -23,7 +23,7 @@ mc alias set local http://localhost:9000 minioadmin minioadmin
 mc mb local/fae-backups
 ```
 
-In Fae UI (`http://127.0.0.1:4321/backups/destinations/new`):
+In Fae UI (`http://127.0.0.1:4321/destinations/new`):
 
 - Name: `local-minio`
 - Endpoint URL: `http://localhost:9000`

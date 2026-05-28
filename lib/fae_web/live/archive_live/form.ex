@@ -199,7 +199,7 @@ defmodule FaeWeb.ArchiveLive.Form do
         <%= if @destinations == [] do %>
           <p class="opacity-75">
             You need a storage destination first. <.link
-              navigate={~p"/backups/destinations/new"}
+              navigate={~p"/destinations/new"}
               class="link"
             >Add one</.link>, then come back.
           </p>

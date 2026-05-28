@@ -80,6 +80,41 @@ defmodule Fae.Storage.DestinationTest do
     end
   end
 
+  describe "quick_archive_prefix" do
+    test "defaults to nil" do
+      {:ok, dest} = Destinations.create(@valid_attrs)
+      assert dest.quick_archive_prefix == nil
+    end
+
+    test "accepts a value" do
+      {:ok, dest} =
+        Destinations.create(Map.put(@valid_attrs, :quick_archive_prefix, "archive"))
+
+      assert dest.quick_archive_prefix == "archive"
+    end
+
+    test "accepts a nested value" do
+      {:ok, dest} =
+        Destinations.create(Map.put(@valid_attrs, :quick_archive_prefix, "archive/quick"))
+
+      assert dest.quick_archive_prefix == "archive/quick"
+    end
+
+    test "strips leading and trailing slashes and whitespace" do
+      {:ok, dest} =
+        Destinations.create(Map.put(@valid_attrs, :quick_archive_prefix, "  /archive/  "))
+
+      assert dest.quick_archive_prefix == "archive"
+    end
+
+    test "normalizes a blank value to nil" do
+      {:ok, dest} =
+        Destinations.create(Map.put(@valid_attrs, :quick_archive_prefix, "   "))
+
+      assert dest.quick_archive_prefix == nil
+    end
+  end
+
   describe "create_with_verification/1" do
     setup do
       Application.put_env(:fae, :storage_drivers, %{"s3" => DriverMock})

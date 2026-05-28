@@ -4,69 +4,68 @@ defmodule FaeWeb.SidebarNav do
   of groups → items, consumed by `FaeWeb.Layouts` when rendering the
   rail.
 
-  Each group is rendered as a column of icon buttons; groups are
-  separated by a thin divider. New tools register by appending a
-  group (or item to an existing group) — no DB, no migrations.
+  Each group renders as a column of icon buttons, separated by a thin
+  divider. Every group carries an `:anchor`: `:top` groups stack from
+  the top of the rail (Dashboard, the tools, then shared Destinations),
+  while `:bottom` groups are pinned to the foot as system chrome
+  (Updates, Settings). New tools register by appending a group (or an
+  item to an existing group) — no DB, no migrations.
   """
 
+  @type anchor :: :top | :bottom
   @type item :: %{path: String.t(), label: String.t(), icon: String.t()}
-  @type group :: %{items: [item()]}
+  @type group :: %{anchor: anchor(), items: [item()]}
 
   @groups [
     %{
+      anchor: :top,
       items: [
         %{path: "/", label: "Dashboard", icon: "hero-home"}
       ]
     },
     %{
+      anchor: :top,
       items: [
         %{path: "/backups", label: "Backup jobs", icon: "hero-archive-box"},
-        %{path: "/backups/destinations", label: "Destinations", icon: "hero-server"}
-      ]
-    },
-    %{
-      items: [
         %{path: "/archive", label: "Archive", icon: "hero-cloud-arrow-up"}
       ]
     },
     %{
+      anchor: :top,
       items: [
-        %{path: "/update", label: "Updates", icon: "hero-arrow-down-tray"}
+        %{path: "/destinations", label: "Destinations", icon: "hero-server"}
       ]
     },
     %{
+      anchor: :bottom,
       items: [
+        %{path: "/update", label: "Updates", icon: "hero-arrow-down-tray"},
         %{path: "/settings", label: "Settings", icon: "hero-cog-6-tooth"}
       ]
     }
   ]
 
-  @doc "Canonical ordered list of sidebar groups."
+  @doc "Canonical ordered list of every sidebar group."
   @spec groups() :: [group()]
   def groups, do: @groups
 
-  @doc "Flat list of every nav item across every group."
-  @spec items() :: [item()]
-  def items, do: Enum.flat_map(@groups, & &1.items)
+  @doc "Sidebar groups anchored to `:top` or `:bottom` of the rail, in order."
+  @spec groups(anchor()) :: [group()]
+  def groups(anchor), do: Enum.filter(@groups, &(&1.anchor == anchor))
 
   @doc """
-  True when `item_path` is the most specific nav item matching
-  `current_path`. The home route (`"/"`) only matches exactly; every
-  other path matches if `current_path` equals it or is nested under
-  it. When two items both prefix-match, the longer path wins (so
-  `/backups/destinations` lights up Destinations, not Backup jobs).
+  True when the rail item at `item_path` should be highlighted for
+  `current_path`. The home route (`"/"`) matches only on an exact
+  equality; every other item matches when `current_path` equals it or
+  is nested under it (so `/backups/<id>/edit` highlights Backup jobs).
+
+  Rail items are never prefixes of one another, so a plain prefix test
+  is unambiguous. If a future item ever nests under another, this would
+  need a longest-match tiebreak.
   """
   @spec active?(String.t() | nil, String.t()) :: boolean()
   def active?(nil, _item_path), do: false
-
-  def active?(current_path, item_path) do
-    matches?(current_path, item_path) and
-      not Enum.any?(items(), fn other ->
-        other.path != item_path and
-          String.length(other.path) > String.length(item_path) and
-          matches?(current_path, other.path)
-      end)
-  end
+  def active?(current_path, item_path), do: matches?(current_path, item_path)
 
   defp matches?(current, "/"), do: current == "/"
   defp matches?(current, path), do: current == path or String.starts_with?(current, path <> "/")

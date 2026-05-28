@@ -70,22 +70,40 @@ defmodule FaeWeb.Layouts do
   attr :current_path, :string, required: true
 
   defp sidebar(assigns) do
+    assigns =
+      assigns
+      |> assign(:top_groups, FaeWeb.SidebarNav.groups(:top))
+      |> assign(:bottom_groups, FaeWeb.SidebarNav.groups(:bottom))
+
     ~H"""
     <aside
       class="flex flex-col w-14 shrink-0 bg-base-200 border-r border-base-300 sticky top-0 self-start h-screen z-20"
       data-role="sidebar"
     >
-      <nav class="flex flex-col items-center gap-1 py-3 flex-1">
-        <%= for {group, idx} <- Enum.with_index(FaeWeb.SidebarNav.groups()) do %>
-          <%= if idx > 0 do %>
-            <div class="w-8 h-px bg-base-300 my-2" aria-hidden="true"></div>
-          <% end %>
-          <%= for item <- group.items do %>
-            <.sidebar_item current_path={@current_path} item={item} />
-          <% end %>
-        <% end %>
+      <nav class="flex flex-col items-center gap-1 py-3 flex-1" data-role="sidebar-top">
+        <.sidebar_groups current_path={@current_path} groups={@top_groups} leading_divider={false} />
+      </nav>
+      <nav class="flex flex-col items-center gap-1 pb-3" data-role="sidebar-bottom">
+        <.sidebar_groups current_path={@current_path} groups={@bottom_groups} leading_divider={true} />
       </nav>
     </aside>
+    """
+  end
+
+  attr :current_path, :string, required: true
+  attr :groups, :list, required: true
+  attr :leading_divider, :boolean, default: false
+
+  defp sidebar_groups(assigns) do
+    ~H"""
+    <%= for {group, idx} <- Enum.with_index(@groups) do %>
+      <%= if idx > 0 or @leading_divider do %>
+        <div class="w-8 h-px bg-base-300 my-2" aria-hidden="true"></div>
+      <% end %>
+      <%= for item <- group.items do %>
+        <.sidebar_item current_path={@current_path} item={item} />
+      <% end %>
+    <% end %>
     """
   end
 

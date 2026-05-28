@@ -12,9 +12,13 @@ defmodule Fae.Archive do
   """
   alias Fae.Archive.ArchiveWorker
   alias Fae.Archive.Items
+  alias Fae.Archive.KeyBuilder
   alias Fae.Archive.Run
   alias Fae.Archive.Runs
+  alias Fae.Storage.Destinations
   alias Fae.Topics
+
+  @empty_slug_message "must contain at least one letter or number"
 
   @doc """
   Subscribes the caller to `archive:runs` — `{:run_changed, run_id}` on
@@ -38,6 +42,61 @@ defmodule Fae.Archive do
          {:ok, _job} <- enqueue(run.id) do
       {:ok, run}
     end
+  end
+
+  @doc """
+  Starts a quick archive: one-shot, upload-dated. `attrs` are the form
+  params (`name` = the label text, `source_path`, `destination_id`). The
+  dated folder path is composed from the destination's `quick_archive_prefix`,
+  `today`, and a slug of the name, then stored as the run's `label` so the
+  worker's normal key path applies unchanged. `today` is injected (defaults
+  to `Date.utc_today/0`) so the path reflects when the operator clicked.
+
+  Returns `{:error, %Ecto.Changeset{}}` for form errors (missing destination,
+  a name with nothing slug-worthy) and `{:error, :collision, existing_run}`
+  when the same label was already archived to the same destination today.
+  """
+  @spec start_quick_archive(map(), Date.t()) ::
+          {:ok, Run.t()} | {:error, Ecto.Changeset.t()} | {:error, :collision, Run.t()}
+  def start_quick_archive(attrs, today \\ Date.utc_today()) do
+    with {:ok, destination} <- fetch_destination(attrs),
+         {:ok, label} <- compute_quick_label(destination, attrs, today),
+         :ok <- ensure_no_quick_collision(destination.id, label),
+         {:ok, run} <- Runs.create_quick(attrs, label),
+         {:ok, _job} <- enqueue(run.id) do
+      {:ok, run}
+    end
+  end
+
+  defp fetch_destination(attrs) do
+    case load_destination(attrs["destination_id"]) do
+      nil -> {:error, quick_error(attrs, :destination_id, "does not exist")}
+      destination -> {:ok, destination}
+    end
+  end
+
+  defp load_destination(id) when is_binary(id) and id != "", do: Destinations.get(id)
+  defp load_destination(_), do: nil
+
+  defp compute_quick_label(destination, attrs, today) do
+    case KeyBuilder.quick_label(destination.quick_archive_prefix, today, attrs["name"] || "") do
+      {:ok, label} -> {:ok, label}
+      {:error, :empty_slug} -> {:error, quick_error(attrs, :name, @empty_slug_message)}
+    end
+  end
+
+  defp ensure_no_quick_collision(destination_id, label) do
+    case Runs.quick_collision(destination_id, label) do
+      nil -> :ok
+      %Run{} = existing -> {:error, :collision, existing}
+    end
+  end
+
+  defp quick_error(attrs, field, message) do
+    %Run{}
+    |> Run.quick_form_changeset(attrs)
+    |> Map.put(:action, :insert)
+    |> Ecto.Changeset.add_error(field, message)
   end
 
   @doc """

@@ -259,12 +259,12 @@ defmodule FaeWeb.DashboardLive do
     <section id="destinations-section" class="card bg-base-200 p-6 space-y-3">
       <div class="flex items-baseline justify-between">
         <h2 class="text-xl font-semibold">Destinations</h2>
-        <.link navigate={~p"/backups/destinations"} class="link text-sm">View all</.link>
+        <.link navigate={~p"/destinations"} class="link text-sm">View all</.link>
       </div>
 
       <%= if @destinations == [] do %>
         <p class="text-sm opacity-75">
-          No destinations configured. <.link navigate={~p"/backups/destinations/new"} class="link">Add one</.link>.
+          No destinations configured. <.link navigate={~p"/destinations/new"} class="link">Add one</.link>.
         </p>
       <% else %>
         <ul class="divide-y divide-base-300">

@@ -194,7 +194,7 @@ defmodule FaeWeb.BackupsLive.JobForm do
 
         <%= if @destinations == [] do %>
           <div class="alert alert-warning">
-            No destinations configured. <.link navigate={~p"/backups/destinations/new"} class="link">Create one first</.link>.
+            No destinations configured. <.link navigate={~p"/destinations/new"} class="link">Create one first</.link>.
           </div>
         <% else %>
           <.form for={@form} phx-change="validate" phx-submit="save" class="space-y-3">

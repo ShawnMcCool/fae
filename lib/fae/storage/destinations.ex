@@ -10,7 +10,7 @@ defmodule Fae.Storage.Destinations do
       already trusts its input.
     * `create_with_verification/1` and `update_with_verification/2` —
       run the driver's `verify/1` (a HEAD on the bucket for S3)
-      before persisting. The form behind `/backups/destinations/new`
+      before persisting. The form behind `/destinations/new`
       uses these so credentials/region/bucket-existence problems
       become inline form errors instead of cryptic Hetzner failures
       at the first backup run.

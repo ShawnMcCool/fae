@@ -1,6 +1,10 @@
-defmodule FaeWeb.BackupsLive.DestinationsIndex do
+defmodule FaeWeb.DestinationsLive.Index do
   @moduledoc """
-  Lists configured backup destinations with edit and delete actions.
+  Lists configured storage destinations with edit and delete actions.
+
+  Destinations are shared infrastructure: both Backups and Archive
+  write to them, so this lives at the top-level `/destinations` route
+  rather than under any single tool.
   """
 
   use FaeWeb, :live_view
@@ -43,18 +47,14 @@ defmodule FaeWeb.BackupsLive.DestinationsIndex do
       <section class="card bg-base-200 p-6 space-y-4">
         <div class="flex items-center justify-between gap-4">
           <h2 class="text-xl font-semibold">Destinations</h2>
-          <div class="flex gap-2">
-            <.link navigate={~p"/backups"} class="btn btn-sm btn-ghost">Back to jobs</.link>
-            <.link navigate={~p"/backups/destinations/new"} class="btn btn-sm btn-primary">
-              New destination
-            </.link>
-          </div>
+          <.link navigate={~p"/destinations/new"} class="btn btn-sm btn-primary">
+            New destination
+          </.link>
         </div>
 
         <%= if @destinations == [] do %>
           <p class="opacity-75">
-            No destinations yet.
-            <.link navigate={~p"/backups/destinations/new"} class="link">Add one</.link>
+            No destinations yet. <.link navigate={~p"/destinations/new"} class="link">Add one</.link>
             to start creating jobs.
           </p>
         <% else %>
@@ -78,7 +78,7 @@ defmodule FaeWeb.BackupsLive.DestinationsIndex do
                     <td class="font-mono text-xs">{dest.bucket} / {dest.region}</td>
                     <td class="text-right space-x-1">
                       <.link
-                        navigate={~p"/backups/destinations/#{dest.id}/edit"}
+                        navigate={~p"/destinations/#{dest.id}/edit"}
                         class="btn btn-xs btn-ghost"
                       >
                         Edit

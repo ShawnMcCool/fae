@@ -51,6 +51,38 @@ defmodule Fae.Archive.Runs do
     end
   end
 
+  @doc """
+  Inserts a quick archive. `attrs` are the form params (name, source_path,
+  destination_id); `label` is the dated folder path precomputed by
+  `Fae.Archive` and stored as the remote folder segment.
+  """
+  @spec create_quick(map(), String.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
+  def create_quick(attrs, label) do
+    changeset =
+      %Run{}
+      |> Run.quick_form_changeset(attrs)
+      |> Ecto.Changeset.put_change(:label, label)
+
+    with {:ok, run} <- Repo.insert(changeset) do
+      broadcast_changed(run.id)
+      {:ok, run}
+    end
+  end
+
+  @doc """
+  An existing quick run sharing a destination and dated `label`, or nil.
+  Because the date is baked into the label, this naturally scopes the
+  uniqueness check to "same label, same destination, same day".
+  """
+  @spec quick_collision(Ecto.UUID.t(), String.t()) :: Run.t() | nil
+  def quick_collision(destination_id, label) do
+    Repo.one(
+      from r in Run,
+        where: r.kind == "quick" and r.destination_id == ^destination_id and r.label == ^label,
+        limit: 1
+    )
+  end
+
   @spec rename_change(Run.t(), map()) :: Ecto.Changeset.t()
   def rename_change(run, attrs \\ %{}), do: Run.rename_changeset(run, attrs)
 

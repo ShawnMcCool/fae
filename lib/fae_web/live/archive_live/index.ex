@@ -56,7 +56,12 @@ defmodule FaeWeb.ArchiveLive.Index do
       <section class="card bg-base-200 p-6 space-y-4">
         <div class="flex items-center justify-between gap-4">
           <h2 class="text-xl font-semibold">Archive</h2>
-          <.link navigate={~p"/archive/new"} class="btn btn-sm btn-primary">New archive</.link>
+          <div class="flex gap-2">
+            <.link navigate={~p"/archive/quick/new"} class="btn btn-sm btn-ghost">
+              Quick Archive
+            </.link>
+            <.link navigate={~p"/archive/new"} class="btn btn-sm btn-primary">New archive</.link>
+          </div>
         </div>
 
         <%= if @runs == [] do %>
@@ -83,6 +88,9 @@ defmodule FaeWeb.ArchiveLive.Index do
                 <tr :for={run <- @runs} id={"run-#{run.id}"}>
                   <td>
                     <.link navigate={~p"/archive/#{run.id}"} class="link">{display_name(run)}</.link>
+                    <span :if={run.kind == "quick"} class="badge badge-ghost badge-sm ml-1">
+                      quick
+                    </span>
                   </td>
                   <td class="font-mono text-xs opacity-75">{run.source_path}</td>
                   <td>{if run.destination, do: run.destination.name, else: "—"}</td>
@@ -101,6 +109,7 @@ defmodule FaeWeb.ArchiveLive.Index do
                   <td class="whitespace-nowrap">
                     <div class="flex justify-end gap-1">
                       <button
+                        :if={run.kind == "standard"}
                         type="button"
                         phx-click="sync"
                         phx-value-id={run.id}
