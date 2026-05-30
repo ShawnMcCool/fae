@@ -1,7 +1,8 @@
 defmodule Fae.StatusTest do
-  # Not async: snapshot/0 reads the singleton dotfiles config (id = 1), whose
-  # lazy-insert-on-read writes a shared row; running async would contend with
-  # other writers of that singleton under SQLite's single-writer lock.
+  # Not async: snapshot/0 reads global, non-sandboxed process state — the
+  # SystemStatus GenServer and the SelfUpdate/UpdateChecker :persistent_term
+  # cache. Running async would interleave with tests that assert on that
+  # shared state (e.g. SelfUpdate.StorageTest).
   use Fae.DataCase, async: false
 
   alias Fae.Backups.{Jobs, Run, Runs}

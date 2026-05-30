@@ -1,5 +1,10 @@
 defmodule Fae.SelfUpdate.StorageTest do
-  use Fae.DataCase, async: true
+  # Not async: this exercises the VM-global :persistent_term cache in
+  # UpdateChecker (a single shared key). The per-test clear_cache below only
+  # isolates within this module; a concurrent async module touching the same
+  # cache (e.g. UpdateCheckerTest) would race it. Siblings that touch this
+  # cache (updater_test, update_live_test) are async: false for the same reason.
+  use Fae.DataCase, async: false
 
   alias Fae.SelfUpdate.{Storage, UpdateChecker}
 
