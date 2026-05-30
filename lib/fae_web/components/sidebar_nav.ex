@@ -27,6 +27,7 @@ defmodule FaeWeb.SidebarNav do
       anchor: :top,
       items: [
         %{path: "/backups", label: "Backup jobs", icon: "hero-archive-box"},
+        %{path: "/dotfiles", label: "Dotfiles", icon: "hero-document-duplicate"},
         %{path: "/archive", label: "Archive", icon: "hero-cloud-arrow-up"}
       ]
     },

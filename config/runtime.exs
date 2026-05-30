@@ -19,6 +19,10 @@ if config_env() == :prod do
   fae_data_dir = Path.join(data_home, "fae")
   File.mkdir_p!(fae_data_dir)
 
+  config :fae, Fae.Dotfiles,
+    git_dir: Path.join(fae_data_dir, "dotfiles/repo.git"),
+    work_tree: System.fetch_env!("HOME")
+
   database_path = System.get_env("DATABASE_PATH") || Path.join(fae_data_dir, "fae.db")
 
   # Auto-generated and persisted on first run. This is a desktop app — the

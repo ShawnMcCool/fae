@@ -29,6 +29,10 @@ defmodule FaeWeb.Router do
         live "/:id/edit", BackupsLive.JobForm, :edit
       end
 
+      scope "/dotfiles" do
+        live "/", DotfilesLive.Index, :index
+      end
+
       scope "/archive" do
         live "/", ArchiveLive.Index, :index
         live "/new", ArchiveLive.Form, :new

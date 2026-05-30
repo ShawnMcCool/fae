@@ -19,6 +19,7 @@ defmodule Fae.Application do
       Fae.SelfUpdate.Updater,
       Fae.Backups.Supervisor,
       Fae.Archive.Supervisor,
+      Fae.Dotfiles.Scheduler,
       FaeWeb.Endpoint
     ]
 
@@ -47,6 +48,7 @@ defmodule Fae.Application do
 
     Fae.Backups.boot!()
     Fae.Archive.boot!()
+    Fae.Dotfiles.boot!()
 
     result
   end

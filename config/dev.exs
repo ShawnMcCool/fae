@@ -7,6 +7,10 @@ config :fae, Fae.Repo,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true
 
+config :fae, Fae.Dotfiles,
+  git_dir: Path.expand("~/.local/share/fae/dotfiles/repo.git"),
+  work_tree: System.user_home!()
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #

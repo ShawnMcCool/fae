@@ -318,6 +318,64 @@ defmodule FaeWeb.DashboardViewTest do
     end
   end
 
+  describe "build/1 dotfiles shaping" do
+    test "shapes the dotfiles section from config, tracked count, and last run" do
+      view = build_with_dotfiles()
+      assert view.dotfiles.enabled == true
+      assert view.dotfiles.tracked_count == 3
+      assert view.dotfiles.last_backup_at == ~U[2026-05-17 02:00:00Z]
+      assert view.dotfiles.last_push_ok == true
+      assert view.dotfiles.repo_remote == "git@example.com:dotfiles.git"
+    end
+
+    test "reflects a failed push and a disabled config" do
+      view =
+        build_with_dotfiles(
+          config: %Fae.Dotfiles.Config{
+            enabled: false,
+            last_backup_at: nil,
+            last_push_ok: false,
+            remote_url: nil
+          },
+          tracked_count: 0
+        )
+
+      assert view.dotfiles.enabled == false
+      assert view.dotfiles.last_push_ok == false
+      assert view.dotfiles.tracked_count == 0
+      assert view.dotfiles.last_backup_at == nil
+      assert view.dotfiles.repo_remote == nil
+    end
+  end
+
+  defp build_with_dotfiles(opts \\ []) do
+    config =
+      Keyword.get(opts, :config, %Fae.Dotfiles.Config{
+        enabled: true,
+        last_backup_at: ~U[2026-05-17 02:00:00Z],
+        last_push_ok: true,
+        remote_url: "git@example.com:dotfiles.git"
+      })
+
+    DashboardView.build(%{
+      jobs: [],
+      last_runs: %{},
+      recent_runs: [],
+      destinations: [],
+      version: "0.2.0",
+      latest_release: nil,
+      self_update_phase: :idle,
+      self_update_error: nil,
+      system: %{boot_at: ~U[2026-05-17 00:00:00Z], uptime_seconds: 0},
+      now: ~U[2026-05-17 09:00:00Z],
+      dotfiles: %{
+        config: config,
+        tracked_count: Keyword.get(opts, :tracked_count, 3),
+        last_run: Keyword.get(opts, :last_run)
+      }
+    })
+  end
+
   defp enabled_daily_job(opts) do
     %Job{
       id: Keyword.fetch!(opts, :id),

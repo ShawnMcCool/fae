@@ -9,6 +9,7 @@ Architectural and design decisions live in `docs/decisions/` in MADR 4.0 lean fo
 - `docs/decisions/architecture/2026-05-16-027-desktop-application-with-realtime-web-ui.md` — Fae is a desktop app; state lives in supervised processes; the DB is persistence, not source of truth; UI is LiveView + PubSub only; tools are sub-supervisor trees.
 - `docs/decisions/architecture/2026-05-16-028-no-application-layer-auth-on-single-user-desktop.md` — no login; loopback-only binding is the trust model; reversal triggers are documented.
 - `docs/decisions/architecture/2026-05-16-029-self-update-via-public-github-releases.md` — self-update polls public GitHub Releases, verifies SHA256, runs a detached installer; trust is anchored to TLS + GitHub account; no GPG signing in v1, but reversal triggers documented.
+- `docs/decisions/architecture/2026-05-30-032-dotfiles-bare-repo-in-place.md` — the Dotfiles tool: bare-repo-in-place auto-backup of config to a per-machine GitHub repo (work-tree = `$HOME`, no symlinks); replaces dot-filer.
 
 The remaining decisions in `docs/decisions/` originated in the central library at `~/src/decisions/` and were imported for relevance to Fae. Categories:
 
