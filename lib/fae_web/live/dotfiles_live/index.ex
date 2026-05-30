@@ -11,7 +11,7 @@ defmodule FaeWeb.DotfilesLive.Index do
 
   alias Fae.Dotfiles
   alias Fae.Dotfiles.{Git, Paths, TrackedPath, TrackedPaths}
-  alias FaeWeb.DotfilesLive.{IgnoresComponent, TrackPathComponent}
+  alias FaeWeb.DotfilesLive.{IgnoresComponent, ImportComponent, TrackPathComponent}
   alias FaeWeb.DotfilesView
 
   @cadence_options [
@@ -47,6 +47,11 @@ defmodule FaeWeb.DotfilesLive.Index do
 
   def handle_info({:ignores_done}, socket),
     do: {:noreply, socket |> assign(:modal, nil) |> load()}
+
+  def handle_info({:import_done}, socket),
+    do: {:noreply, socket |> assign(:modal, nil) |> load()}
+
+  def handle_info({:import_cancel}, socket), do: {:noreply, assign(socket, :modal, nil)}
 
   def handle_info(_, socket), do: {:noreply, socket}
 
@@ -97,16 +102,24 @@ defmodule FaeWeb.DotfilesLive.Index do
     {:noreply, assign(socket, :modal, {:ignores, path})}
   end
 
+  def handle_event("import_dotfiles", _params, socket) do
+    {:noreply, assign(socket, :modal, :import)}
+  end
+
   defp load(socket) do
+    config = Dotfiles.get_config()
+
     view =
       DotfilesView.build(%{
-        config: Dotfiles.get_config(),
+        config: config,
         tracked: Dotfiles.list_tracked(),
         runs: Dotfiles.recent_runs(20),
         now: Fae.Clock.now()
       })
 
-    assign(socket, :view, view)
+    socket
+    |> assign(:view, view)
+    |> assign(:not_initialized, not config.initialized)
   end
 
   @impl true
@@ -124,6 +137,14 @@ defmodule FaeWeb.DotfilesLive.Index do
           <div class="flex-1"></div>
           <button type="button" phx-click="backup_now" class="btn btn-sm btn-ghost">
             Back up now
+          </button>
+          <button
+            :if={@not_initialized}
+            type="button"
+            phx-click="import_dotfiles"
+            class="btn btn-sm btn-ghost"
+          >
+            Import from dot-filer
           </button>
           <button type="button" phx-click="track_path" class="btn btn-sm btn-primary">
             <.icon name="hero-plus" class="size-4" /> Track a path
@@ -303,6 +324,8 @@ defmodule FaeWeb.DotfilesLive.Index do
         id="ignores"
         tracked_path={ignores_target(@modal)}
       />
+
+      <.live_component :if={@modal == :import} module={ImportComponent} id="dotfiles-import" />
     </Layouts.app>
     """
   end
