@@ -9,12 +9,8 @@ defmodule FaeWeb.DashboardLive do
 
   use FaeWeb, :live_view
 
-  alias Fae.Backups.{Jobs, Runs}
-  alias Fae.Storage.Destinations
-  alias Fae.{Clock, Dotfiles, SelfUpdate, SystemStatus, Topics, Version}
+  alias Fae.{Status, SystemStatus, Topics}
   alias FaeWeb.DashboardView
-
-  @recent_activity_limit 10
 
   @impl true
   def mount(_params, _session, socket) do
@@ -335,43 +331,9 @@ defmodule FaeWeb.DashboardLive do
   end
 
   defp refresh(socket, overrides \\ []) do
-    now = Clock.now()
-    jobs = Jobs.list()
-    last_runs = Map.new(jobs, fn job -> {job.id, Runs.last(job.id)} end)
-    recent_runs = Runs.list_recent_all(@recent_activity_limit)
-    destinations = Destinations.list()
-    self_update = SelfUpdate.current_status()
-    latest_release = release_from_cache()
-    system = Keyword.get(overrides, :system) || SystemStatus.get_state()
-
-    dotfiles = %{
-      config: Dotfiles.get_config(),
-      tracked_count: length(Dotfiles.list_tracked()),
-      last_run: Dotfiles.last_run()
-    }
-
-    view =
-      DashboardView.build(%{
-        jobs: jobs,
-        last_runs: last_runs,
-        recent_runs: recent_runs,
-        destinations: destinations,
-        version: Version.current_version(),
-        latest_release: latest_release,
-        self_update_phase: self_update.phase,
-        self_update_error: self_update.error,
-        system: system,
-        now: now,
-        dotfiles: dotfiles
-      })
-
+    snapshot = Status.snapshot()
+    system = Keyword.get(overrides, :system) || snapshot.system
+    view = DashboardView.build(%{snapshot | system: system})
     assign(socket, :view, view)
-  end
-
-  defp release_from_cache do
-    case SelfUpdate.cached_release() do
-      {:ok, release} -> release
-      :none -> nil
-    end
   end
 end

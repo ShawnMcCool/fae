@@ -50,3 +50,7 @@ restart:
 # Just status — show the service status.
 status:
     systemctl --user status fae
+
+# Just report — print the live operational JSON from /api/status (honors $PORT).
+report:
+    curl -s "http://127.0.0.1:${PORT:-4321}/api/status" | jq .

@@ -52,8 +52,12 @@ defmodule FaeWeb.Router do
     end
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", FaeWeb do
-  #   pipe_through :api
-  # end
+  # Read-only JSON status for same-machine consumers (quickshell bar, scripts).
+  # No auth — loopback-only binding is the trust model (decision-028), and
+  # decision-027 sanctions read-only health endpoints as a non-LiveView route.
+  scope "/api", FaeWeb do
+    pipe_through :api
+
+    get "/status", StatusController, :show
+  end
 end

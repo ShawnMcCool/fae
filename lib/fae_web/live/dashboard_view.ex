@@ -12,6 +12,7 @@ defmodule FaeWeb.DashboardView do
 
   alias Fae.Backups.{Job, Recurrence, Run}
   alias Fae.Dotfiles.Config, as: DotfilesConfig
+  alias Fae.Health
 
   @recent_activity_error_preview_chars 120
 
@@ -101,7 +102,7 @@ defmodule FaeWeb.DashboardView do
     activity = build_activity(input.recent_runs)
 
     update_state =
-      classify_self_update(input.self_update_phase, input.latest_release, input.version)
+      Health.classify_update(input.self_update_phase, input.latest_release, input.version)
 
     %{
       health: health(enabled_jobs, input.last_runs, input.self_update_phase),
@@ -150,41 +151,12 @@ defmodule FaeWeb.DashboardView do
     }
   end
 
-  @spec health([Job.t()], %{optional(Ecto.UUID.t()) => Run.t() | nil}, atom()) :: health()
-  def health(enabled_jobs, last_runs, self_update_phase) do
-    cond do
-      self_update_phase == :failed ->
-        %{level: :down, reason: "Self-update failed — see Updates page."}
-
-      (failing = count_failing(enabled_jobs, last_runs)) > 0 ->
-        %{level: :degraded, reason: failing_reason(failing)}
-
-      true ->
-        %{level: :healthy, reason: nil}
-    end
-  end
-
-  defp failing_reason(1), do: "1 job's last run failed."
-  defp failing_reason(n) when n > 1, do: "#{n} jobs' last run failed."
-
-  @spec count_failing([Job.t()], %{optional(Ecto.UUID.t()) => Run.t() | nil}) :: non_neg_integer()
-  def count_failing(enabled_jobs, last_runs) do
-    Enum.count(enabled_jobs, fn job ->
-      case Map.get(last_runs, job.id) do
-        %Run{status: "failed"} -> true
-        _ -> false
-      end
-    end)
-  end
-
-  @spec soonest_next_fire([Job.t()], DateTime.t()) :: DateTime.t() | nil
-  def soonest_next_fire([], _now), do: nil
-
-  def soonest_next_fire(enabled_jobs, now) do
-    enabled_jobs
-    |> Enum.map(&Recurrence.next_fire(&1, now))
-    |> Enum.min(DateTime, fn -> nil end)
-  end
+  # Health derivations are owned by `Fae.Health` (shared with the
+  # machine-facing status contract). Delegated here so the dashboard render
+  # path and tests keep a stable presenter API.
+  defdelegate health(enabled_jobs, last_runs, self_update_phase), to: Health
+  defdelegate count_failing(enabled_jobs, last_runs), to: Health
+  defdelegate soonest_next_fire(enabled_jobs, now), to: Health
 
   @doc """
   Renders a duration in seconds as a compact human label. Tiers:
@@ -328,24 +300,6 @@ defmodule FaeWeb.DashboardView do
       summary
     end
   end
-
-  defp classify_self_update(:failed, _release, _local), do: :failed
-
-  defp classify_self_update(phase, _release, _local)
-       when phase in [:preparing, :downloading, :extracting, :handing_off], do: :applying
-
-  defp classify_self_update(_phase, nil, _local), do: :idle
-
-  defp classify_self_update(_phase, release, local) do
-    case Fae.Version.compare_versions(release_version(release), local) do
-      :gt -> :update_available
-      _ -> :idle
-    end
-  end
-
-  defp release_version(%{version: v}) when is_binary(v), do: v
-  defp release_version(%{tag: tag}) when is_binary(tag), do: tag
-  defp release_version(_), do: ""
 
   defp get_release_field(nil, _key), do: nil
   defp get_release_field(release, key), do: Map.get(release, key)
