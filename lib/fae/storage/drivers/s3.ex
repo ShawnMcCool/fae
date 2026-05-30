@@ -6,14 +6,13 @@ defmodule Fae.Storage.Drivers.S3 do
 
   ## Uploads
 
-    * `put/3` is an in-memory upload — `File.read!/1` loads the whole
-      file before signing and PUTting. Fine for SQLite DBs and modest
-      folders (the Backups tool's use).
-    * `put_stream/4` streams the file in bounded parts (single PUT at
-      or below the part size, S3 multipart above it), sends a per-part
+    * `put_stream/4` is the only upload path (used by both Backups and
+      Archive). It streams the file in bounded parts (single PUT at or
+      below the part size, S3 multipart above it), sends a per-part
       `Content-MD5` the provider validates, folds a whole-file SHA256
-      while streaming, and HEAD-checks the stored size. This is the
-      Archive tool's path for arbitrarily large files.
+      while streaming, and HEAD-checks the stored size. Memory stays
+      flat regardless of file size, so it handles arbitrarily large
+      files — multi-GB SQLite DBs included.
 
   ## Other notes
 
@@ -31,27 +30,13 @@ defmodule Fae.Storage.Drivers.S3 do
   # for non-final parts.
   @default_part_size_bytes 64 * 1024 * 1024
 
-  @impl true
-  def put(%Destination{} = dest, key, source_path) do
-    body = File.read!(source_path)
-    byte_size = byte_size(body)
-    sha256 = :crypto.hash(:sha256, body) |> Base.encode16(case: :lower)
-
-    url = object_url(dest, key)
-    headers = base_headers(url)
-    signed = sign(dest, "PUT", url, headers, body)
-
-    case Req.put(url, body: body, headers: signed) do
-      {:ok, %Req.Response{status: status}} when status in 200..299 ->
-        {:ok, %{byte_size: byte_size, sha256: sha256}}
-
-      {:ok, %Req.Response{status: status, body: response_body}} ->
-        {:error, {:s3_error, status, response_body}}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
+  # Per-request receive timeout for the part-carrying PUTs. Req/Finch
+  # default to 15s, which a single multi-GB or even a 64 MiB part can't
+  # finish on a home uplink — the provider only responds once it has
+  # received the whole part, so this must cover a full part transfer at
+  # a slow upload speed. 10 minutes covers a 64 MiB part down to roughly
+  # 1 Mbit/s.
+  @upload_receive_timeout_ms 10 * 60 * 1000
 
   @impl true
   def put_stream(%Destination{} = dest, key, source_path, opts) do
@@ -75,7 +60,8 @@ defmodule Fae.Storage.Drivers.S3 do
     signed = sign(dest, "PUT", url, headers, body)
 
     with {:ok, %Req.Response{status: status, headers: resp_headers}}
-         when status in 200..299 <- Req.put(url, body: body, headers: signed),
+         when status in 200..299 <-
+           Req.put(url, body: body, headers: signed, receive_timeout: @upload_receive_timeout_ms),
          {:ok, ^byte_size} <- head_object_size(dest, key) do
       {:ok, %{byte_size: byte_size, sha256: sha256, etag: header(resp_headers, "etag")}}
     else
@@ -192,7 +178,7 @@ defmodule Fae.Storage.Drivers.S3 do
     headers = base_headers(url) ++ [{"content-md5", content_md5(data)}]
     signed = sign(dest, "PUT", url, headers, data)
 
-    case Req.put(url, body: data, headers: signed) do
+    case Req.put(url, body: data, headers: signed, receive_timeout: @upload_receive_timeout_ms) do
       {:ok, %Req.Response{status: 200, headers: resp_headers}} ->
         case header(resp_headers, "etag") do
           nil -> {:error, :missing_part_etag}

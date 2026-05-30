@@ -10,16 +10,13 @@ defmodule Fae.Storage.Drivers.Driver do
 
   alias Fae.Storage.Destination
 
-  @type put_result :: %{byte_size: non_neg_integer(), sha256: String.t()}
   @type stream_result :: %{byte_size: non_neg_integer(), sha256: String.t(), etag: String.t()}
   @type object :: %{key: String.t(), last_modified: DateTime.t(), size: non_neg_integer()}
 
-  @callback put(Destination.t(), key :: String.t(), source_path :: String.t()) ::
-              {:ok, put_result()} | {:error, term()}
-
   @doc """
-  Streaming, integrity-checked upload for large files (the Archive
-  tool). Reads `source_path` in bounded parts so memory stays flat
+  Streaming, integrity-checked upload — the single upload path for
+  both the Backups and Archive tools. Reads `source_path` in bounded
+  parts so memory stays flat
   regardless of file size, sends a per-part `Content-MD5` so the
   provider rejects any corrupted bytes in transit, and folds a
   whole-file SHA256 while streaming. After the upload it confirms the

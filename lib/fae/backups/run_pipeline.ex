@@ -111,7 +111,7 @@ defmodule Fae.Backups.RunPipeline do
     driver = Drivers.driver_for(job.destination)
     object_key = build_object_key(job, run, ext)
 
-    case driver.put(job.destination, object_key, upload_path) do
+    case driver.put_stream(job.destination, object_key, upload_path, []) do
       {:ok, %{byte_size: bytes, sha256: sha}} ->
         apply_retention(job, driver)
         {:ok, %{object_key: object_key, byte_size: bytes, sha256: sha}}

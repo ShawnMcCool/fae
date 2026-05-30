@@ -54,13 +54,33 @@ defmodule Fae.Backups.RunPipelineTest do
   end
 
   describe "successful run" do
+    test "uploads via the streaming (multipart-capable) driver path, not in-memory put", %{
+      destination: destination
+    } do
+      job = create_job(destination)
+
+      DriverMock
+      |> expect(:put_stream, fn ^destination, key, upload_path, opts ->
+        assert String.starts_with?(key, "#{job.slug}/")
+        assert File.read!(upload_path) == "hello"
+        assert is_list(opts)
+        {:ok, %{byte_size: 5, sha256: "abc123", etag: "\"e\""}}
+      end)
+      |> expect(:list, fn _dest, _prefix -> {:ok, []} end)
+
+      assert {:ok, finished} = RunPipeline.run(job)
+      assert finished.status == "success"
+      assert finished.byte_size == 5
+      assert finished.sha256 == "abc123"
+    end
+
     test "records success, builds expected object key, broadcasts events", %{
       destination: destination
     } do
       job = create_job(destination)
 
       DriverMock
-      |> expect(:put, fn ^destination, key, upload_path ->
+      |> expect(:put_stream, fn ^destination, key, upload_path, _opts ->
         assert String.starts_with?(key, "#{job.slug}/")
         assert String.ends_with?(key, ".txt")
         assert File.read!(upload_path) == "hello"
@@ -90,7 +110,7 @@ defmodule Fae.Backups.RunPipelineTest do
       job = create_job(destination, %{prefix: "vault"})
 
       DriverMock
-      |> expect(:put, fn _dest, key, _path ->
+      |> expect(:put_stream, fn _dest, key, _path, _opts ->
         assert String.starts_with?(key, "vault/#{job.slug}/")
         {:ok, %{byte_size: 5, sha256: "x"}}
       end)
@@ -109,7 +129,7 @@ defmodule Fae.Backups.RunPipelineTest do
       job = create_job(destination)
 
       DriverMock
-      |> expect(:put, fn _dest, key, _path ->
+      |> expect(:put_stream, fn _dest, key, _path, _opts ->
         assert String.starts_with?(key, "fae/shawn/#{job.slug}/")
         {:ok, %{byte_size: 5, sha256: "x"}}
       end)
@@ -128,7 +148,7 @@ defmodule Fae.Backups.RunPipelineTest do
       job = create_job(destination, %{prefix: "databases"})
 
       DriverMock
-      |> expect(:put, fn _dest, key, _path ->
+      |> expect(:put_stream, fn _dest, key, _path, _opts ->
         assert String.starts_with?(key, "fae/shawn/databases/#{job.slug}/")
         {:ok, %{byte_size: 5, sha256: "x"}}
       end)
@@ -144,7 +164,7 @@ defmodule Fae.Backups.RunPipelineTest do
       job = create_job(destination, %{package_format: "tar_gz"})
 
       DriverMock
-      |> expect(:put, fn _dest, key, _path ->
+      |> expect(:put_stream, fn _dest, key, _path, _opts ->
         assert String.ends_with?(key, ".tar.gz")
         {:ok, %{byte_size: 12, sha256: "x"}}
       end)
@@ -172,7 +192,7 @@ defmodule Fae.Backups.RunPipelineTest do
       test_pid = self()
 
       DriverMock
-      |> expect(:put, fn _dest, _key, _path -> {:ok, %{byte_size: 5, sha256: "x"}} end)
+      |> expect(:put_stream, fn _dest, _key, _path, _opts -> {:ok, %{byte_size: 5, sha256: "x"}} end)
       |> expect(:list, fn _dest, _prefix -> {:ok, old_objects} end)
       |> expect(:delete, fn _dest, key ->
         send(test_pid, {:deleted, key})
@@ -190,7 +210,7 @@ defmodule Fae.Backups.RunPipelineTest do
       job = create_job(destination)
 
       DriverMock
-      |> expect(:put, fn _dest, _key, _path -> {:error, :boom} end)
+      |> expect(:put_stream, fn _dest, _key, _path, _opts -> {:error, :boom} end)
 
       Fae.Backups.subscribe_runs()
       assert {:failed, :boom} = RunPipeline.run(job)
@@ -223,7 +243,7 @@ defmodule Fae.Backups.RunPipelineTest do
       transport_error = %Finch.TransportError{reason: :nxdomain}
 
       DriverMock
-      |> expect(:put, fn _dest, _key, _path -> {:error, transport_error} end)
+      |> expect(:put_stream, fn _dest, _key, _path, _opts -> {:error, transport_error} end)
 
       Fae.Backups.subscribe_runs()
       assert {:snoozed, ^transport_error} = RunPipeline.run(job, last_attempt?: false)
@@ -243,7 +263,7 @@ defmodule Fae.Backups.RunPipelineTest do
       transport_error = %Finch.TransportError{reason: :nxdomain}
 
       DriverMock
-      |> expect(:put, fn _dest, _key, _path -> {:error, transport_error} end)
+      |> expect(:put_stream, fn _dest, _key, _path, _opts -> {:error, transport_error} end)
 
       Fae.Backups.subscribe_runs()
       assert {:failed, ^transport_error} = RunPipeline.run(job, last_attempt?: true)
@@ -261,7 +281,7 @@ defmodule Fae.Backups.RunPipelineTest do
       permanent_error = {:s3_error, 403, "Forbidden"}
 
       DriverMock
-      |> expect(:put, fn _dest, _key, _path -> {:error, permanent_error} end)
+      |> expect(:put_stream, fn _dest, _key, _path, _opts -> {:error, permanent_error} end)
 
       assert {:failed, ^permanent_error} = RunPipeline.run(job, last_attempt?: false)
 

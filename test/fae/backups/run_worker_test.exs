@@ -51,7 +51,7 @@ defmodule Fae.Backups.RunWorkerTest do
   describe "manual kind" do
     test "runs the pipeline and records success", %{job: job} do
       DriverMock
-      |> expect(:put, fn _dest, _key, _path -> {:ok, %{byte_size: 5, sha256: "x"}} end)
+      |> expect(:put_stream, fn _dest, _key, _path, _opts -> {:ok, %{byte_size: 5, sha256: "x"}} end)
       |> expect(:list, fn _dest, _prefix -> {:ok, []} end)
 
       assert :ok = perform_job(RunWorker, %{"job_id" => job.id, "kind" => "manual"})
@@ -112,7 +112,7 @@ defmodule Fae.Backups.RunWorkerTest do
       job: job
     } do
       DriverMock
-      |> expect(:put, fn _dest, _key, _path ->
+      |> expect(:put_stream, fn _dest, _key, _path, _opts ->
         {:error, %Finch.TransportError{reason: :nxdomain}}
       end)
 
@@ -129,7 +129,7 @@ defmodule Fae.Backups.RunWorkerTest do
 
     test "transient error on final attempt cancels with failed row", %{job: job} do
       DriverMock
-      |> expect(:put, fn _dest, _key, _path ->
+      |> expect(:put_stream, fn _dest, _key, _path, _opts ->
         {:error, %Finch.TransportError{reason: :nxdomain}}
       end)
 
@@ -147,7 +147,7 @@ defmodule Fae.Backups.RunWorkerTest do
       job: job
     } do
       DriverMock
-      |> expect(:put, fn _dest, _key, _path -> {:error, {:s3_error, 403, "Forbidden"}} end)
+      |> expect(:put_stream, fn _dest, _key, _path, _opts -> {:error, {:s3_error, 403, "Forbidden"}} end)
 
       assert {:cancel, {:s3_error, 403, "Forbidden"}} =
                perform_job(RunWorker, %{"job_id" => job.id, "kind" => "manual"},
