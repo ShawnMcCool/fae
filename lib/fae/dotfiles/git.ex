@@ -85,6 +85,57 @@ defmodule Fae.Dotfiles.Git do
     end
   end
 
+  @doc "Validate a remote URL is reachable + authorized. Classifies failures."
+  def ls_remote(url, _opts \\ []) do
+    case System.cmd("git", ["ls-remote", url],
+           env: [{"GIT_TERMINAL_PROMPT", "0"}],
+           stderr_to_stdout: true
+         ) do
+      {_, 0} -> :ok
+      {out, _} -> {:error, classify_remote_error(out)}
+    end
+  end
+
+  defp classify_remote_error(out) do
+    cond do
+      out =~ "Permission denied" or out =~ "Could not read from remote" or
+          out =~ "authentication" ->
+        :auth_failed
+
+      out =~ "not found" or out =~ "does not appear to be a git repository" or
+        out =~ "Repository not found" or
+          (out =~ "repository" and out =~ "not exist") ->
+        :not_found
+
+      out =~ "Could not resolve host" or out =~ "unable to access" or out =~ "timed out" ->
+        :unreachable
+
+      true ->
+        :unreachable
+    end
+  end
+
+  @doc "Make the named remote's URL match `url` (add if missing, set-url if drifted)."
+  def ensure_remote(name, url, opts \\ []) do
+    case run(["remote", "get-url", name], opts) do
+      {current, 0} ->
+        if String.trim(current) == url do
+          :ok
+        else
+          case run(["remote", "set-url", name, url], opts) do
+            {_, 0} -> :ok
+            {out, _} -> {:error, out}
+          end
+        end
+
+      _ ->
+        case run(["remote", "add", name, url], opts) do
+          {_, 0} -> :ok
+          {out, _} -> {:error, out}
+        end
+    end
+  end
+
   def push(remote, branch, opts \\ []) do
     case run(["push", remote, "HEAD:#{branch}"], opts) do
       {_, 0} -> :ok
