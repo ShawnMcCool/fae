@@ -159,7 +159,12 @@ defmodule FaeWeb.Layouts do
         id="client-error"
         kind={:error}
         title="We can't find the internet"
-        phx-disconnected={show(".phx-client-error #client-error") |> JS.remove_attribute("hidden")}
+        phx-disconnected={
+          show("html:not(.fae-updating) .phx-client-error #client-error")
+          |> JS.remove_attribute("hidden",
+            to: "html:not(.fae-updating) .phx-client-error #client-error"
+          )
+        }
         phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
         hidden
       >
@@ -171,11 +176,38 @@ defmodule FaeWeb.Layouts do
         id="server-error"
         kind={:error}
         title="Something went wrong!"
-        phx-disconnected={show(".phx-server-error #server-error") |> JS.remove_attribute("hidden")}
+        phx-disconnected={
+          show("html:not(.fae-updating) .phx-server-error #server-error")
+          |> JS.remove_attribute("hidden",
+            to: "html:not(.fae-updating) .phx-server-error #server-error"
+          )
+        }
         phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
         hidden
       >
         Attempting to reconnect
+        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
+      </.flash>
+
+      <%!-- Shown instead of the error toasts during a self-update restart. The
+      Updates LiveView sets the `fae-updating` flag on <html> (via app.js)
+      before the server restarts; this notice clears the flag on reconnect. --%>
+      <.flash
+        id="update-restart"
+        kind={:info}
+        title="Applying update…"
+        phx-disconnected={
+          show("html.fae-updating #update-restart")
+          |> JS.remove_attribute("hidden", to: "html.fae-updating #update-restart")
+        }
+        phx-connected={
+          hide("#update-restart")
+          |> JS.set_attribute({"hidden", ""})
+          |> JS.remove_class("fae-updating", to: "html")
+        }
+        hidden
+      >
+        Fae is restarting. Hang tight — you'll be reconnected in a moment.
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
     </div>

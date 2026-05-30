@@ -158,4 +158,45 @@ defmodule FaeWeb.UpdateLiveTest do
       assert has_element?(view, "#apply-progress")
     end
   end
+
+  describe "update-restart client signalling" do
+    test "an applying-phase progress broadcast tells the client a restart is expected",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/update")
+
+      for phase <- [:preparing, :downloading, :extracting, :handing_off] do
+        Phoenix.PubSub.broadcast(
+          Fae.PubSub,
+          Topics.self_update_progress(),
+          {:progress, phase, nil}
+        )
+
+        assert_push_event(view, "fae-updating", %{})
+      end
+    end
+
+    test "an apply failure tells the client to clear the restart signal", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/update")
+
+      Phoenix.PubSub.broadcast(
+        Fae.PubSub,
+        Topics.self_update_progress(),
+        {:apply_failed, :boom}
+      )
+
+      assert_push_event(view, "fae-update-aborted", %{})
+    end
+
+    test "an apply cancellation tells the client to clear the restart signal", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/update")
+
+      Phoenix.PubSub.broadcast(
+        Fae.PubSub,
+        Topics.self_update_progress(),
+        {:apply_cancelled}
+      )
+
+      assert_push_event(view, "fae-update-aborted", %{})
+    end
+  end
 end

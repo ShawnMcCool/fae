@@ -79,14 +79,16 @@ defmodule FaeWeb.UpdateLive do
     {:noreply,
      socket
      |> assign(:apply_phase, phase)
-     |> assign(:apply_percent, percent)}
+     |> assign(:apply_percent, percent)
+     |> signal_restart_expected(phase)}
   end
 
   def handle_info({:apply_failed, reason}, socket) do
     {:noreply,
      socket
      |> assign(:apply_phase, :failed)
-     |> assign(:apply_error, reason)}
+     |> assign(:apply_error, reason)
+     |> push_event("fae-update-aborted", %{})}
   end
 
   def handle_info({:apply_cancelled}, socket) do
@@ -94,7 +96,8 @@ defmodule FaeWeb.UpdateLive do
      socket
      |> assign(:apply_phase, :idle)
      |> assign(:apply_error, nil)
-     |> assign(:apply_percent, nil)}
+     |> assign(:apply_percent, nil)
+     |> push_event("fae-update-aborted", %{})}
   end
 
   def handle_info({:apply_succeeded}, socket) do
@@ -102,6 +105,19 @@ defmodule FaeWeb.UpdateLive do
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}
+
+  # Applying an update ends in a service restart that drops the LiveView
+  # socket. Tell the client a restart is expected so the disconnect shows the
+  # friendly "applying update" notice instead of the generic "Something went
+  # wrong!" error toast. The client clears the flag on reconnect; we also clear
+  # it on failure/cancellation (handlers above), since no restart follows.
+  @restart_expected_phases [:preparing, :downloading, :extracting, :handing_off]
+
+  defp signal_restart_expected(socket, phase) when phase in @restart_expected_phases do
+    push_event(socket, "fae-updating", %{})
+  end
+
+  defp signal_restart_expected(socket, _phase), do: socket
 
   defp assign_cached_release(socket) do
     case SelfUpdate.cached_release() do

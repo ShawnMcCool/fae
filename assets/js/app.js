@@ -36,6 +36,19 @@ topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
+// During a self-update the server restarts, which drops the LiveView socket.
+// The Updates LiveView pushes "fae-updating" before that happens so the
+// disconnect shows the friendly "Applying update…" notice instead of the
+// generic "Something went wrong!" error toast (see flash_group in layouts.ex).
+// The flag is cleared on reconnect by the notice itself, or here if the apply
+// is aborted before any restart.
+window.addEventListener("phx:fae-updating", () =>
+  document.documentElement.classList.add("fae-updating")
+)
+window.addEventListener("phx:fae-update-aborted", () =>
+  document.documentElement.classList.remove("fae-updating")
+)
+
 // connect if there are any LiveViews on the page
 liveSocket.connect()
 
