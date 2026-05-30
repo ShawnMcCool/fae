@@ -37,9 +37,7 @@ defmodule Fae.Dotfiles.GitHub do
   end
 
   defp hostname do
-    case :inet.gethostname() do
-      {:ok, h} -> List.to_string(h)
-      _ -> "machine"
-    end
+    {:ok, h} = :inet.gethostname()
+    List.to_string(h)
   end
 end
