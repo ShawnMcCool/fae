@@ -47,3 +47,6 @@ npm-debug.log
 *.db
 *.db-*
 
+
+# brainstorming visual companion
+.superpowers/
