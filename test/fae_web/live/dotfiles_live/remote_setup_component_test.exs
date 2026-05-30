@@ -124,6 +124,32 @@ defmodule FaeWeb.DotfilesLive.RemoteSetupComponentTest do
       assert Configs.get().remote_url == remote
     end
 
+    test "an empty repo name shows an inline error and never calls create", %{conn: conn} do
+      test_pid = self()
+
+      opts = %{
+        github_available?: true,
+        default_repo_name: "dotfiles-box",
+        create_repo_fn: fn _ ->
+          send(test_pid, :create_called)
+          {:error, "boom"}
+        end
+      }
+
+      {:ok, view, _html} = render_host(conn, opts)
+
+      view |> element(~s{button[phx-click="choose_create"]}) |> render_click()
+
+      html =
+        view
+        |> element(~s{form[phx-submit="create_repo"]})
+        |> render_submit(%{"name" => "   "})
+
+      assert html =~ "Enter a repository name"
+      refute html =~ "Remote set"
+      refute_receive :create_called
+    end
+
     test "an already-taken name shows a friendly inline error", %{conn: conn} do
       opts = %{
         github_available?: true,
@@ -168,6 +194,49 @@ defmodule FaeWeb.DotfilesLive.RemoteSetupComponentTest do
       # The Done step's Close button notifies the parent to dismiss the modal.
       view |> element(~s{button[phx-click="close"]}, "Close") |> render_click()
       assert_receive {:host_remote_done}
+    end
+
+    test "an empty url shows an inline error and never calls set_remote", %{conn: conn} do
+      test_pid = self()
+
+      set_remote_fn = fn _url ->
+        send(test_pid, :set_remote_called)
+        {:ok, %{}}
+      end
+
+      {:ok, view, _html} =
+        render_host(conn, %{github_available?: false, set_remote_fn: set_remote_fn})
+
+      view |> element(~s{button[phx-click="choose_paste"]}) |> render_click()
+
+      html =
+        view
+        |> element(~s{form[phx-submit="save_url"]})
+        |> render_submit(%{"url" => "   "})
+
+      assert html =~ "Paste a repository URL"
+      refute html =~ "Remote set"
+      refute_receive :set_remote_called
+    end
+
+    test "a pasted url with a trailing slash is normalized before saving", %{conn: conn} do
+      test_pid = self()
+
+      set_remote_fn = fn url ->
+        send(test_pid, {:set_remote_called, url})
+        {:ok, %{}}
+      end
+
+      {:ok, view, _html} =
+        render_host(conn, %{github_available?: false, set_remote_fn: set_remote_fn})
+
+      view |> element(~s{button[phx-click="choose_paste"]}) |> render_click()
+
+      view
+      |> element(~s{form[phx-submit="save_url"]})
+      |> render_submit(%{"url" => "  git@github.com:you/dotfiles.git/  "})
+
+      assert_receive {:set_remote_called, "git@github.com:you/dotfiles.git"}
     end
 
     test "pasting a bogus url shows a friendly error and leaves the remote unchanged",

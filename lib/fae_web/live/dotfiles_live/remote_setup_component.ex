@@ -58,17 +58,38 @@ defmodule FaeWeb.DotfilesLive.RemoteSetupComponent do
     {:noreply, assign(socket, step: :choose, error: nil)}
   end
 
-  def handle_event("create_repo", %{"name" => name}, socket) do
-    name = String.trim(name)
+  def handle_event("create_repo", _params, %{assigns: %{busy?: true}} = socket),
+    do: {:noreply, socket}
 
-    case socket.assigns.create_repo_fn.(name) do
-      {:ok, url} -> finish_with_remote(socket, url)
-      {:error, reason} -> {:noreply, assign(socket, error: create_error_message(reason))}
+  def handle_event("create_repo", %{"name" => name}, socket) do
+    case String.trim(name) do
+      "" ->
+        {:noreply, assign(socket, error: "Enter a repository name.")}
+
+      name ->
+        socket = assign(socket, busy?: true)
+
+        case socket.assigns.create_repo_fn.(name) do
+          {:ok, url} ->
+            finish_with_remote(socket, url)
+
+          {:error, reason} ->
+            {:noreply, assign(socket, busy?: false, error: create_error_message(reason))}
+        end
     end
   end
 
+  def handle_event("save_url", _params, %{assigns: %{busy?: true}} = socket),
+    do: {:noreply, socket}
+
   def handle_event("save_url", %{"url" => url}, socket) do
-    finish_with_remote(socket, String.trim(url))
+    case url |> String.trim() |> String.trim_trailing("/") do
+      "" ->
+        {:noreply, assign(socket, error: "Paste a repository URL.")}
+
+      url ->
+        finish_with_remote(assign(socket, busy?: true), url)
+    end
   end
 
   def handle_event("close", _params, socket) do
@@ -79,10 +100,10 @@ defmodule FaeWeb.DotfilesLive.RemoteSetupComponent do
   defp finish_with_remote(socket, url) do
     case socket.assigns.set_remote_fn.(url) do
       {:ok, _config} ->
-        {:noreply, assign(socket, step: :done, remote_url: url, error: nil)}
+        {:noreply, assign(socket, step: :done, remote_url: url, error: nil, busy?: false)}
 
       {:error, reason} ->
-        {:noreply, assign(socket, error: set_remote_error_message(reason))}
+        {:noreply, assign(socket, busy?: false, error: set_remote_error_message(reason))}
     end
   end
 
@@ -188,7 +209,9 @@ defmodule FaeWeb.DotfilesLive.RemoteSetupComponent do
               ← Back
             </button>
             <div class="flex-1"></div>
-            <button type="submit" class="btn btn-primary">Create repository</button>
+            <button type="submit" class="btn btn-primary" disabled={@busy?}>
+              {if @busy?, do: "Creating…", else: "Create repository"}
+            </button>
           </div>
         </form>
 
@@ -217,7 +240,9 @@ defmodule FaeWeb.DotfilesLive.RemoteSetupComponent do
               ← Back
             </button>
             <div class="flex-1"></div>
-            <button type="submit" class="btn btn-primary">Check &amp; save</button>
+            <button type="submit" class="btn btn-primary" disabled={@busy?}>
+              {if @busy?, do: "Checking…", else: "Check & save"}
+            </button>
           </div>
         </form>
 
