@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fae.local/api/status.schema.json",
+  "title": "Fae status",
+  "description": "Read-only operational snapshot served at GET /api/status. See docs/api/status.md.",
+  "type": "object",
+  "required": ["schema", "generated_at", "health", "system", "backups", "activity", "dotfiles"],
+  "additionalProperties": false,
+  "$defs": {
+    "timestamp": {
+      "type": ["string", "null"],
+      "description": "ISO-8601 UTC, whole seconds, Z suffix; null when unknown.",
+      "format": "date-time"
+    },
+    "runStatus": {
+      "type": ["string", "null"],
+      "enum": ["success", "failed", "running", "skipped", "snoozed", null]
+    }
+  },
+  "properties": {
+    "schema": { "type": "integer", "const": 1 },
+    "generated_at": { "$ref": "#/$defs/timestamp" },
+    "health": {
+      "type": "object",
+      "required": ["level", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "level": { "type": "string", "enum": ["healthy", "degraded", "down"] },
+        "reason": { "type": ["string", "null"] }
+      }
+    },
+    "system": {
+      "type": "object",
+      "required": ["version", "booted_at", "uptime_seconds", "update"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "string" },
+        "booted_at": { "$ref": "#/$defs/timestamp" },
+        "uptime_seconds": { "type": "integer", "minimum": 0 },
+        "update": {
+          "type": "object",
+          "required": ["state", "version", "published_at"],
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "type": "string",
+              "enum": ["idle", "update_available", "applying", "failed"]
+            },
+            "version": { "type": ["string", "null"] },
+            "published_at": { "$ref": "#/$defs/timestamp" }
+          }
+        }
+      }
+    },
+    "backups": {
+      "type": "object",
+      "required": ["enabled_count", "failing_count", "next_fire_at", "jobs"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled_count": { "type": "integer", "minimum": 0 },
+        "failing_count": { "type": "integer", "minimum": 0 },
+        "next_fire_at": { "$ref": "#/$defs/timestamp" },
+        "jobs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "enabled", "status", "last_run_at", "next_fire_at"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "enabled": { "type": "boolean" },
+              "status": { "$ref": "#/$defs/runStatus" },
+              "last_run_at": { "$ref": "#/$defs/timestamp" },
+              "next_fire_at": { "$ref": "#/$defs/timestamp" }
+            }
+          }
+        }
+      }
+    },
+    "activity": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "job_name",
+          "status",
+          "started_at",
+          "finished_at",
+          "duration_seconds",
+          "error"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "run_id": { "type": "string" },
+          "job_name": { "type": ["string", "null"] },
+          "status": { "$ref": "#/$defs/runStatus" },
+          "started_at": { "$ref": "#/$defs/timestamp" },
+          "finished_at": { "$ref": "#/$defs/timestamp" },
+          "duration_seconds": { "type": ["integer", "null"], "minimum": 0 },
+          "error": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "dotfiles": {
+      "type": "object",
+      "required": ["enabled", "last_backup_at", "last_push_ok", "tracked_count"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "last_backup_at": { "$ref": "#/$defs/timestamp" },
+        "last_push_ok": { "type": "boolean" },
+        "tracked_count": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
