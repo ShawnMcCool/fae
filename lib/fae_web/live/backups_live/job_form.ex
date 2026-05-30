@@ -9,13 +9,18 @@ defmodule FaeWeb.BackupsLive.JobForm do
 
   alias Fae.Backups.{Job, Jobs}
   alias Fae.Storage.Destinations
+  alias FaeWeb.PathBrowser
 
   @impl true
   def mount(params, _session, socket) do
     destinations = Destinations.list()
 
-    {:ok,
-     apply_action(assign(socket, :destinations, destinations), socket.assigns.live_action, params)}
+    socket =
+      socket
+      |> assign(:destinations, destinations)
+      |> assign(:browser, nil)
+
+    {:ok, apply_action(socket, socket.assigns.live_action, params)}
   end
 
   defp apply_action(socket, :new, _params) do
@@ -113,6 +118,50 @@ defmodule FaeWeb.BackupsLive.JobForm do
     end
   end
 
+  def handle_event("open_source_picker", _params, socket) do
+    config = source_picker_config(current_source_kind(socket), picker_start(socket))
+    {:noreply, assign(socket, :browser, config)}
+  end
+
+  @impl true
+  def handle_info({:path_browser, :selected, return_to, value}, socket) do
+    attrs =
+      socket.assigns.form.params
+      |> Map.put(to_string(return_to), value)
+      |> with_retention_params()
+
+    changeset =
+      socket.assigns.job
+      |> Jobs.change(attrs)
+      |> Map.put(:action, :validate)
+
+    {:noreply, socket |> assign(:browser, nil) |> assign(:form, to_form(changeset))}
+  end
+
+  def handle_info({:path_browser, :closed}, socket) do
+    {:noreply, assign(socket, :browser, nil)}
+  end
+
+  defp current_source_kind(socket) do
+    socket.assigns.form.params["source_kind"] || socket.assigns.job.source_kind
+  end
+
+  # Start the picker in the directory of the current source_path when it
+  # points somewhere usable (the path itself if it's a dir, else its parent),
+  # otherwise the user's home.
+  defp picker_start(socket) do
+    case socket.assigns.form.params["source_path"] || socket.assigns.job.source_path do
+      path when is_binary(path) and path != "" ->
+        dir = if File.dir?(path), do: path, else: Path.dirname(path)
+        if File.dir?(dir), do: dir, else: home()
+
+      _ ->
+        home()
+    end
+  end
+
+  defp home, do: System.user_home() || "/"
+
   defp with_retention_params(%{"retention_strategy" => "keep_last_n"} = attrs) do
     Map.put(attrs, "retention_params", %{"n" => to_int(attrs["retention_n"], 30)})
   end
@@ -140,6 +189,27 @@ defmodule FaeWeb.BackupsLive.JobForm do
       :error -> default
     end
   end
+
+  @doc """
+  Build the `PathBrowser` config for the source picker, given the job's
+  `source_kind` and the local directory to start browsing in. A `folder`
+  source picks a folder; `file` and `sqlite` pick an individual file. An
+  unset kind defaults to file picking, matching the dropdown's first option.
+  """
+  def source_picker_config(source_kind, start_path) do
+    base = %{source: {:local, start_path}, mode: :pick, return_to: :source_path}
+
+    Map.merge(base, pick_for_kind(source_kind))
+  end
+
+  defp pick_for_kind("folder"),
+    do: %{pick: :folder, show_files: false, title: "Choose a folder"}
+
+  defp pick_for_kind("sqlite"),
+    do: %{pick: :file, show_files: true, title: "Choose a SQLite database"}
+
+  defp pick_for_kind(_file_or_unset),
+    do: %{pick: :file, show_files: true, title: "Choose a file"}
 
   defp assign_retention_params_inputs(socket, attrs) do
     socket
@@ -239,12 +309,24 @@ defmodule FaeWeb.BackupsLive.JobForm do
 
             <div>
               <label class="label">Source path</label>
-              <.input
-                field={@form[:source_path]}
-                type="text"
-                placeholder="/home/user/.local/share/fae/fae.db"
-                class="input input-bordered w-full font-mono"
-              />
+              <div class="flex gap-2 items-center">
+                <div class="grow">
+                  <.input
+                    field={@form[:source_path]}
+                    type="text"
+                    placeholder="/home/user/.local/share/fae/fae.db"
+                    class="input input-bordered w-full font-mono"
+                  />
+                </div>
+                <button
+                  type="button"
+                  phx-click="open_source_picker"
+                  class="btn btn-square btn-ghost"
+                  title="Browse for the source"
+                >
+                  <.icon name="hero-folder-open" />
+                </button>
+              </div>
             </div>
 
             <div>
@@ -408,6 +490,19 @@ defmodule FaeWeb.BackupsLive.JobForm do
           </.form>
         <% end %>
       </section>
+
+      <.live_component
+        :if={@browser}
+        module={PathBrowser}
+        id="path-browser"
+        tz={@timezone}
+        source={@browser.source}
+        mode={@browser.mode}
+        pick={@browser.pick}
+        show_files={@browser.show_files}
+        title={@browser.title}
+        return_to={@browser.return_to}
+      />
     </Layouts.app>
     """
   end

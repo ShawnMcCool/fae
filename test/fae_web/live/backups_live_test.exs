@@ -258,4 +258,54 @@ defmodule FaeWeb.BackupsLiveTest do
       refute Jobs.get(job.id)
     end
   end
+
+  describe "JobForm source picker" do
+    setup do
+      dir = Path.join(System.tmp_dir!(), "fae-src-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(Path.join(dir, "sub"))
+      File.write!(Path.join(dir, "fae.db"), "data")
+      on_exit(fn -> File.rm_rf!(dir) end)
+      %{dir: dir}
+    end
+
+    test "folder source: browse navigates and 'Use this folder' fills the path", %{
+      conn: conn,
+      dir: dir
+    } do
+      create_destination!()
+      {:ok, view, _html} = live(conn, ~p"/backups/new")
+
+      view |> form("form", job: %{source_kind: "folder", source_path: dir}) |> render_change()
+      view |> element("button[phx-click='open_source_picker']") |> render_click()
+      assert render_async(view) =~ "sub"
+
+      view |> element("button[phx-click='navigate'][phx-value-name='sub']") |> render_click()
+      render_async(view)
+      view |> element("button", "Use this folder") |> render_click()
+
+      assert render(view) =~ ~s(value="#{Path.join(dir, "sub")}")
+    end
+
+    test "file source: browse lists files and clicking one fills the full path", %{
+      conn: conn,
+      dir: dir
+    } do
+      create_destination!()
+      {:ok, view, _html} = live(conn, ~p"/backups/new")
+
+      view |> form("form", job: %{source_kind: "sqlite", source_path: dir}) |> render_change()
+      view |> element("button[phx-click='open_source_picker']") |> render_click()
+      html = render_async(view)
+
+      assert html =~ "fae.db"
+      # File picking offers no whole-folder selection.
+      refute html =~ "Use this folder"
+
+      view
+      |> element("button[phx-click='select_file'][phx-value-name='fae.db']")
+      |> render_click()
+
+      assert render(view) =~ ~s(value="#{Path.join(dir, "fae.db")}")
+    end
+  end
 end

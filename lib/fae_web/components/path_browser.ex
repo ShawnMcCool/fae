@@ -9,10 +9,16 @@ defmodule FaeWeb.PathBrowser do
         module={FaeWeb.PathBrowser} id="path-browser"
         source={@browser.source}        # {:local, path} | {:remote, %Destination{}, rel}
         mode={@browser.mode}            # :pick | :view
+        pick={@browser.pick}            # :folder (default) | :file — what :pick selects
         show_files={@browser.show_files}
         title={@browser.title}
         return_to={@browser.return_to}  # opaque tag echoed back on select
       />
+
+  In `:pick` mode, `pick: :folder` (the default) shows a "Use this folder"
+  button that returns the current location; `pick: :file` instead makes each
+  listed file clickable and returns the chosen file's full path (requires
+  `show_files: true`).
 
   It owns its own navigation state and loads each level with `start_async`.
   It sends two messages to the parent process (a LiveComponent runs in the
@@ -28,7 +34,7 @@ defmodule FaeWeb.PathBrowser do
 
   @impl true
   def update(assigns, socket) do
-    socket = assign(socket, assigns)
+    socket = socket |> assign(assigns) |> assign_new(:pick, fn -> :folder end)
 
     if socket.assigns[:initialized?] do
       {:ok, socket}
@@ -69,6 +75,12 @@ defmodule FaeWeb.PathBrowser do
 
   def handle_event("select", _params, socket) do
     send(self(), {:path_browser, :selected, socket.assigns.return_to, socket.assigns.loc})
+    {:noreply, socket}
+  end
+
+  def handle_event("select_file", %{"name" => name}, socket) do
+    value = Source.down(socket.assigns.kind, socket.assigns.loc, name)
+    send(self(), {:path_browser, :selected, socket.assigns.return_to, value})
     {:noreply, socket}
   end
 
@@ -134,8 +146,24 @@ defmodule FaeWeb.PathBrowser do
           >
             📁 {folder}
           </button>
+          <button
+            :for={file <- @files}
+            :if={@mode == :pick and @pick == :file}
+            type="button"
+            phx-click="select_file"
+            phx-value-name={file.name}
+            phx-target={@myself}
+            class="flex w-full items-center justify-between gap-3 px-3 py-1.5 text-sm font-mono text-left hover:bg-base-300"
+          >
+            <span class="truncate">📄 {file.name}</span>
+            <span class="opacity-60 text-xs whitespace-nowrap">
+              {format_size(file.size)} ·
+              <.local_datetime value={file.last_modified} tz={@tz} format={:date} />
+            </span>
+          </button>
           <div
             :for={file <- @files}
+            :if={not (@mode == :pick and @pick == :file)}
             class="flex items-center justify-between gap-3 px-3 py-1.5 text-sm font-mono"
           >
             <span class="truncate">📄 {file.name}</span>
@@ -157,7 +185,7 @@ defmodule FaeWeb.PathBrowser do
             {if @mode == :view, do: "Close", else: "Cancel"}
           </button>
           <button
-            :if={@mode == :pick}
+            :if={@mode == :pick and @pick == :folder}
             type="button"
             phx-click="select"
             phx-target={@myself}
