@@ -1,5 +1,8 @@
 defmodule Fae.SelfUpdate.UpdateCheckerTest do
-  use ExUnit.Case, async: true
+  # Not async: writes the VM-global :persistent_term cache ({UpdateChecker,
+  # :cache} / :client), which is shared across modules — running async races
+  # other SelfUpdate tests that read/write it (e.g. StorageTest).
+  use ExUnit.Case, async: false
 
   alias Fae.SelfUpdate.UpdateChecker
 

@@ -49,7 +49,13 @@ config :fae, Fae.Backups.SuspendWatcher, enabled: false
 # Run `mix help test` for more information.
 config :fae, Fae.Repo,
   database: Path.expand("../fae_test.db", __DIR__),
-  pool_size: 5,
+  # SQLite serialises writers, but async tests check out isolated sandbox
+  # connections and run concurrent write transactions, which deadlock on the
+  # SQLite lock and surface as intermittent "Database busy". A single pooled
+  # connection serialises DB access at checkout — async (non-DB) tests still
+  # run in parallel; DB tests queue for the one connection — so two writers
+  # never collide. SQLite is not built for concurrent test writers.
+  pool_size: 1,
   pool: Ecto.Adapters.SQL.Sandbox
 
 # We don't run a server during test. If one is required,

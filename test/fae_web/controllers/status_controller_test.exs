@@ -1,6 +1,7 @@
 defmodule FaeWeb.StatusControllerTest do
-  # Not async: the endpoint's snapshot reads the singleton dotfiles config
-  # (id = 1), whose lazy-insert-on-read writes a shared row — see StatusTest.
+  # Not async: the endpoint's snapshot reads global, non-sandboxed process
+  # state (SystemStatus + the SelfUpdate/UpdateChecker :persistent_term cache),
+  # which would race tests asserting on it — see StatusTest.
   use FaeWeb.ConnCase, async: false
 
   alias Fae.Backups.{Jobs, Runs}
