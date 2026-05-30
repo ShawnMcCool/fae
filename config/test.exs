@@ -9,6 +9,11 @@ config :fae, Fae.SystemStatus, tick_interval_ms: :infinity
 # job queue's worker pool or cron schedule firing at real wall-clock time.
 config :fae, Oban, testing: :inline
 
+# Point Dotfiles at a per-run temp tree so tests never touch the real $HOME.
+config :fae, Fae.Dotfiles,
+  git_dir: Path.join(System.tmp_dir!(), "fae-dotfiles-test/repo.git"),
+  work_tree: Path.join(System.tmp_dir!(), "fae-dotfiles-test/home")
+
 # Don't re-enqueue resumable archive runs at app boot during tests — the
 # boot hook would query the Repo before the per-test sandbox is set up.
 # Tests drive the worker directly.
