@@ -29,6 +29,10 @@ config :fae, :archive_progress_interval_ms, 25
 # test's sandbox.
 config :fae, Fae.Backups.Scheduler, enabled: false
 
+# Disable the application-level Dotfiles.Scheduler in tests for the same
+# reason — its global GenServer would fight with per-test SQL sandboxes.
+config :fae, Fae.Dotfiles.Scheduler, enabled: false
+
 # Same for the Notifier — disabled by default in test; specific tests
 # start one manually with a stub notify_runner.
 config :fae, Fae.Backups.Notifier, enabled: false
