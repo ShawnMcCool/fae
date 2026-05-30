@@ -67,6 +67,23 @@ defmodule Fae.Dotfiles.GitTest do
     assert reason in [:not_found, :auth_failed, :unreachable]
   end
 
+  test "classify_remote_error: real not-found stderr (with auth tail) is :not_found" do
+    out = "ERROR: Repository not found.\nfatal: Could not read from remote repository."
+    assert Git.classify_remote_error(out) == :not_found
+  end
+
+  test "classify_remote_error: permission denied is :auth_failed" do
+    out =
+      "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository."
+
+    assert Git.classify_remote_error(out) == :auth_failed
+  end
+
+  test "classify_remote_error: could not resolve host is :unreachable" do
+    out = "ssh: Could not resolve host: github.com\nfatal: Could not read from remote repository."
+    assert Git.classify_remote_error(out) == :unreachable
+  end
+
   test "ensure_remote sets when missing, no-ops when same, updates when different",
        %{opts: opts} do
     remote_a = Path.join(System.tmp_dir!(), "ens-a-#{System.unique_integer([:positive])}.git")

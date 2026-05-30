@@ -96,19 +96,20 @@ defmodule Fae.Dotfiles.Git do
     end
   end
 
-  defp classify_remote_error(out) do
+  @doc false
+  def classify_remote_error(out) do
     cond do
-      out =~ "Permission denied" or out =~ "Could not read from remote" or
-          out =~ "authentication" ->
-        :auth_failed
-
-      out =~ "not found" or out =~ "does not appear to be a git repository" or
-        out =~ "Repository not found" or
-          (out =~ "repository" and out =~ "not exist") ->
+      out =~ "Repository not found" or out =~ "not found" or
+        out =~ "does not appear to be a git repository" or
+          out =~ "not exist" ->
         :not_found
 
       out =~ "Could not resolve host" or out =~ "unable to access" or out =~ "timed out" ->
         :unreachable
+
+      out =~ "Permission denied" or out =~ "Could not read from remote" or
+          out =~ "authentication" ->
+        :auth_failed
 
       true ->
         :unreachable
