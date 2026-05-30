@@ -166,8 +166,37 @@ DashboardView.build/1 (which delegates derivations to Fae.Health).
 
 ## Convenience
 
-Add a `just status` recipe that curls `http://127.0.0.1:4321/api/status` and
-pretty-prints it (per the project's justfile convention).
+Add a `just status` recipe that curls the endpoint and pretty-prints it (per
+the project's justfile convention). It honors `$PORT` with a 4321 default so it
+tracks the install rather than baking in a number:
+
+```
+status:
+    curl -s "http://127.0.0.1:${PORT:-4321}/api/status" | jq .
+```
+
+No endpoint-discovery file is published. External consumers (quickshell, etc.)
+hardcode the port the operator assigned to their install — that is the
+operator's own config, not a per-install value baked into the Fae repo.
+
+## Payload specification documents (deliverables)
+
+The durable, consumer-facing contract lives outside the process-artifact spec:
+
+- **`docs/api/status.md`** — canonical human-readable payload specification:
+  the endpoint, the no-auth/loopback rationale (cross-referencing decision-028),
+  the `schema` versioning policy, a field-by-field table (type, nullability,
+  meaning, enum values), and a full example response. This is what a person
+  reading "how do I consume Fae's status" lands on.
+- **`docs/api/status.schema.json`** — a machine-checkable JSON Schema
+  (draft 2020-12) describing the response. Authoritative for the payload shape;
+  consumers may validate against it. We do **not** add a JSON-Schema validator
+  dependency to the app just to validate in tests — `StatusContract` tests
+  assert the shape directly (see Testing). The schema is kept in lockstep with
+  `FaeWeb.StatusContract` by review.
+
+Both documents must stay in sync with `FaeWeb.StatusContract`; a `schema` bump
+or field change updates all three together.
 
 ## Testing strategy
 
