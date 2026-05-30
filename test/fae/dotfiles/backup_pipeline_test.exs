@@ -44,7 +44,8 @@ defmodule Fae.Dotfiles.BackupPipelineTest do
     assert Git.head_sha(opts) == {:ok, sha1}
   end
 
-  test "push failure still commits, records pushed: false", %{opts: opts, work: work} do
+  test "push failure still commits, records pushed: false with a classified error",
+       %{opts: opts, work: work} do
     {:ok, _} = Configs.update(%{remote_url: "/nonexistent.git"})
     :ok = Git.set_remote("origin", "/nonexistent.git", opts)
     File.write!(Path.join(work, "f"), "x")
@@ -53,6 +54,44 @@ defmodule Fae.Dotfiles.BackupPipelineTest do
     {:ok, run} = BackupPipeline.run(opts: opts, package_cmd: pkg)
     assert run.status == "success"
     refute run.pushed
-    refute Configs.get().last_push_ok
+    config = Configs.get()
+    refute config.last_push_ok
+    # Classified short reason, not raw multiline git fatal text.
+    assert config.last_push_error in ["not_found", "unreachable", "auth_failed"]
+    refute config.last_push_error =~ "fatal"
+    refute config.last_push_error =~ "\n"
+  end
+
+  test "remote_url nil: cycle commits, skips push, leaves push state neutral",
+       %{opts: opts, work: work} do
+    {:ok, _} = Configs.update(%{remote_url: nil, last_push_ok: true, last_push_error: nil})
+    File.write!(Path.join(work, "f"), "x")
+    {:ok, _} = TrackedPaths.add(%{path: Path.join(work, "f"), kind: "file"})
+    pkg = fn _, _, _ -> {"a\n", 0} end
+    {:ok, run} = BackupPipeline.run(opts: opts, package_cmd: pkg)
+
+    assert run.status == "success"
+    assert {:ok, _sha} = Git.head_sha(opts)
+    refute run.pushed
+
+    config = Configs.get()
+    assert config.last_push_ok
+    assert config.last_push_error == nil
+  end
+
+  test "remote_url set: cycle reconciles remote then pushes",
+       %{opts: opts, work: work} do
+    # Drift the wired remote; the pipeline should reconcile it to config.remote_url before push.
+    :ok = Git.set_remote("origin", "/drifted.git", opts)
+    File.write!(Path.join(work, "f"), "x")
+    {:ok, _} = TrackedPaths.add(%{path: Path.join(work, "f"), kind: "file"})
+    pkg = fn _, _, _ -> {"a\n", 0} end
+    {:ok, run} = BackupPipeline.run(opts: opts, package_cmd: pkg)
+
+    assert run.status == "success"
+    assert run.pushed
+    config = Configs.get()
+    assert config.last_push_ok
+    assert config.last_push_error == nil
   end
 end

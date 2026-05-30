@@ -54,9 +54,7 @@ defmodule Fae.Dotfiles.BackupPipeline do
           nil
       end
 
-    push_result = Git.push(config.remote_name, config.branch, git_opts)
-    pushed = push_result == :ok
-    push_err = if pushed, do: nil, else: elem_or_nil(push_result)
+    {pushed, push_state} = push(config, git_opts)
 
     {:ok, done} =
       Runs.finalize(run, %{
@@ -71,15 +69,29 @@ defmodule Fae.Dotfiles.BackupPipeline do
 
     if sha, do: TrackedPaths.mark_first_backup(roots, now)
 
-    Configs.update(%{
-      last_checked_at: now,
-      last_backup_at: now,
-      last_push_ok: pushed,
-      last_push_error: push_err
-    })
+    Configs.update(Map.merge(%{last_checked_at: now, last_backup_at: now}, push_state))
 
     broadcast(done)
     {:ok, done}
+  end
+
+  # No remote configured: skip push entirely and leave push state untouched so
+  # an intentionally-local setup never shows a spurious failure.
+  defp push(%{remote_url: url}, _git_opts) when url in [nil, ""], do: {false, %{}}
+
+  defp push(config, git_opts) do
+    # Reconcile the wired remote to the config's URL before pushing so the DB
+    # remains the single source of truth.
+    _ = Git.ensure_remote(config.remote_name, config.remote_url, git_opts)
+
+    case Git.push(config.remote_name, config.branch, git_opts) do
+      :ok ->
+        {true, %{last_push_ok: true, last_push_error: nil}}
+
+      {:error, out} ->
+        reason = Git.classify_remote_error(out)
+        {false, %{last_push_ok: false, last_push_error: Atom.to_string(reason)}}
+    end
   end
 
   defp finalize_error(run, err) do
@@ -105,8 +117,6 @@ defmodule Fae.Dotfiles.BackupPipeline do
   defp manifest_or_default(nil, _), do: Paths.manifest_path()
   defp manifest_or_default(work, _), do: Path.join(work, Paths.manifest_relpath())
   defp manifest_relpath(_), do: Paths.manifest_relpath()
-  defp elem_or_nil({:error, m}), do: m
-  defp elem_or_nil(_), do: nil
 
   defp broadcast(run) do
     broadcast_run({:run_finished, run.id, String.to_atom(run.status)})
