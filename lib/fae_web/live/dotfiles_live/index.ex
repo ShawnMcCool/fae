@@ -151,7 +151,7 @@ defmodule FaeWeb.DotfilesLive.Index do
           </button>
         </div>
 
-        <div class="flex flex-wrap items-center gap-3 card bg-base-200 px-4 py-3 text-sm">
+        <div class="flex flex-wrap items-center gap-3 rounded-box bg-base-200 px-4 py-3 text-sm">
           <span class={[
             "inline-block size-2.5 rounded-full",
             if(@view.health.enabled, do: "bg-success", else: "bg-base-content/30")
