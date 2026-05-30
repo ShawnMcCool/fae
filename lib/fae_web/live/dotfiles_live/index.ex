@@ -10,7 +10,8 @@ defmodule FaeWeb.DotfilesLive.Index do
   use FaeWeb, :live_view
 
   alias Fae.Dotfiles
-  alias Fae.Dotfiles.{Git, TrackedPath, TrackedPaths}
+  alias Fae.Dotfiles.{Git, Paths, TrackedPath, TrackedPaths}
+  alias FaeWeb.DotfilesLive.{IgnoresComponent, TrackPathComponent}
   alias FaeWeb.DotfilesView
 
   @cadence_options [
@@ -30,6 +31,7 @@ defmodule FaeWeb.DotfilesLive.Index do
     {:ok,
      socket
      |> assign(:page_title, "Dotfiles")
+     |> assign(:modal, nil)
      |> load()}
   end
 
@@ -37,6 +39,15 @@ defmodule FaeWeb.DotfilesLive.Index do
   def handle_info({:dotfiles_changed}, socket), do: {:noreply, load(socket)}
   def handle_info({:run_started, _}, socket), do: {:noreply, load(socket)}
   def handle_info({:run_finished, _, _}, socket), do: {:noreply, load(socket)}
+
+  def handle_info({:track_done}, socket),
+    do: {:noreply, socket |> assign(:modal, nil) |> load()}
+
+  def handle_info({:track_cancel}, socket), do: {:noreply, assign(socket, :modal, nil)}
+
+  def handle_info({:ignores_done}, socket),
+    do: {:noreply, socket |> assign(:modal, nil) |> load()}
+
   def handle_info(_, socket), do: {:noreply, socket}
 
   @impl true
@@ -66,14 +77,24 @@ defmodule FaeWeb.DotfilesLive.Index do
   end
 
   def handle_event("restore_path", %{"path" => path}, socket) do
-    # Best-effort restore of a missing path from the repo.
-    _ = Git.checkout([path])
+    # Git pathspecs are work-tree-relative; the item carries an absolute path.
+    rel = Path.relative_to(path, Paths.work_tree())
+
+    socket =
+      case Git.checkout([rel]) do
+        :ok -> socket
+        {:error, message} -> put_flash(socket, :error, "Restore failed: #{message}")
+      end
+
     {:noreply, load(socket)}
   end
 
   def handle_event("track_path", _params, socket) do
-    # Placeholder: the Track-a-path modal is wired in Task 14.
-    {:noreply, socket}
+    {:noreply, assign(socket, :modal, :track)}
+  end
+
+  def handle_event("manage_ignores", %{"path" => path}, socket) do
+    {:noreply, assign(socket, :modal, {:ignores, path})}
   end
 
   defp load(socket) do
@@ -215,23 +236,73 @@ defmodule FaeWeb.DotfilesLive.Index do
                 >
                   Restore
                 </button>
-                <button
-                  type="button"
-                  phx-click="stop_tracking"
-                  phx-value-path={item.path}
-                  class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100"
-                  title="Stop tracking"
-                  aria-label={"Stop tracking #{item.name}"}
-                >
-                  <.icon name="hero-x-mark" class="size-4" />
-                </button>
+
+                <div class="dropdown dropdown-end opacity-0 group-hover:opacity-100">
+                  <div
+                    tabindex="0"
+                    role="button"
+                    class="btn btn-ghost btn-xs btn-square"
+                    aria-label={"Actions for #{item.name}"}
+                  >
+                    <.icon name="hero-ellipsis-horizontal" class="size-4" />
+                  </div>
+                  <ul
+                    tabindex="0"
+                    class="dropdown-content menu bg-base-100 rounded-box z-10 w-44 p-2 shadow"
+                  >
+                    <li>
+                      <button type="button" phx-click="manage_ignores" phx-value-path={item.path}>
+                        Manage ignores
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        phx-click="stop_tracking"
+                        phx-value-path={item.path}
+                        class="text-error"
+                      >
+                        Stop tracking
+                      </button>
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <%!-- Recent backups list intentionally omitted for now (history wired in a later pass). --%>
+        <div :if={@view.runs != []}>
+          <h3 class="text-sm font-semibold mb-2">Recent backups</h3>
+          <ul class="space-y-1">
+            <li
+              :for={run <- @view.runs}
+              class="flex items-center gap-3 px-2 py-1 rounded hover:bg-base-200 text-sm"
+            >
+              <span class="text-xs opacity-60 font-mono whitespace-nowrap">
+                <.local_datetime value={run.started_at} tz={@timezone} format={:datetime} />
+              </span>
+              <span class="flex-1 min-w-0 truncate opacity-80">{run_summary(run)}</span>
+              <span class={["text-xs whitespace-nowrap", push_class(run)]}>{push_label(run)}</span>
+            </li>
+          </ul>
+        </div>
       </section>
+
+      <.live_component
+        :if={@modal == :track}
+        module={TrackPathComponent}
+        id="track-path"
+        tz={@timezone}
+        tracked_paths={tracked_path_strings(@view.groups)}
+      />
+
+      <.live_component
+        :if={match?({:ignores, _}, @modal)}
+        module={IgnoresComponent}
+        id="ignores"
+        tracked_path={ignores_target(@modal)}
+      />
     </Layouts.app>
     """
   end
@@ -257,6 +328,49 @@ defmodule FaeWeb.DotfilesLive.Index do
 
   def last_backup_summary(%{last_push_ok: false}), do: "· last push failed"
   def last_backup_summary(_), do: "· pushed ✓"
+
+  @doc "Short change summary for a recent run."
+  def run_summary(%{status: "no_changes"}), do: "no changes"
+  def run_summary(%{status: "error", error_message: message}) when is_binary(message), do: message
+  def run_summary(%{status: "error"}), do: "error"
+
+  def run_summary(run) do
+    parts =
+      [
+        change_part(run.files_added, "added"),
+        change_part(run.files_changed, "changed"),
+        change_part(run.files_deleted, "deleted")
+      ]
+      |> Enum.reject(&is_nil/1)
+
+    case parts do
+      [] -> "no changes"
+      parts -> Enum.join(parts, ", ")
+    end
+  end
+
+  defp change_part(nil, _word), do: nil
+  defp change_part(0, _word), do: nil
+  defp change_part(count, word), do: "#{count} #{word}"
+
+  @doc "Push-status label for a recent run."
+  def push_label(%{pushed: true}), do: "✓ pushed"
+  def push_label(%{status: "no_changes"}), do: "—"
+  def push_label(%{status: "error"}), do: "✗ error"
+  def push_label(_), do: "⚠ not pushed"
+
+  defp push_class(%{pushed: true}), do: "text-success"
+  defp push_class(%{status: "no_changes"}), do: "opacity-50"
+  defp push_class(%{status: "error"}), do: "text-error"
+  defp push_class(_), do: "text-warning"
+
+  defp tracked_path_strings(groups) do
+    groups |> Enum.flat_map(& &1.items) |> Enum.map(& &1.path)
+  end
+
+  defp ignores_target({:ignores, path}) do
+    Enum.find(Dotfiles.list_tracked(), &(&1.path == path))
+  end
 
   defp status_dot_class(:pending), do: "bg-info"
   defp status_dot_class(:missing), do: "bg-error"
