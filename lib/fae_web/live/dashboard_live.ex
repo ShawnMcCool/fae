@@ -2,15 +2,16 @@ defmodule FaeWeb.DashboardLive do
   @moduledoc """
   Operational status dashboard. Subscribes to every live operational
   topic Fae publishes (`system_status`, `backups:runs`, `backups:jobs`,
-  `self_update:status`, `self_update:progress`) and re-renders on each
-  event. View-shaping logic lives in `FaeWeb.DashboardView`.
+  `self_update:status`, `self_update:progress`, `dotfiles:status`) and
+  re-renders on each event. View-shaping logic lives in
+  `FaeWeb.DashboardView`.
   """
 
   use FaeWeb, :live_view
 
   alias Fae.Backups.{Jobs, Runs}
   alias Fae.Storage.Destinations
-  alias Fae.{Clock, SelfUpdate, SystemStatus, Topics, Version}
+  alias Fae.{Clock, Dotfiles, SelfUpdate, SystemStatus, Topics, Version}
   alias FaeWeb.DashboardView
 
   @recent_activity_limit 10
@@ -23,6 +24,7 @@ defmodule FaeWeb.DashboardLive do
       Phoenix.PubSub.subscribe(Fae.PubSub, Topics.backups_jobs())
       Phoenix.PubSub.subscribe(Fae.PubSub, Topics.self_update_status())
       Phoenix.PubSub.subscribe(Fae.PubSub, Topics.self_update_progress())
+      Phoenix.PubSub.subscribe(Fae.PubSub, Topics.dotfiles_status())
     end
 
     {:ok,
@@ -45,6 +47,7 @@ defmodule FaeWeb.DashboardLive do
   def handle_info({:apply_failed, _reason}, socket), do: {:noreply, refresh(socket)}
   def handle_info({:apply_cancelled}, socket), do: {:noreply, refresh(socket)}
   def handle_info({:apply_succeeded}, socket), do: {:noreply, refresh(socket)}
+  def handle_info({:dotfiles_changed}, socket), do: {:noreply, refresh(socket)}
   def handle_info(_other, socket), do: {:noreply, socket}
 
   @impl true
@@ -57,6 +60,7 @@ defmodule FaeWeb.DashboardLive do
         <.jobs_section jobs={@view.jobs} timezone={@timezone} />
         <.activity_section activity={@view.activity} timezone={@timezone} />
         <.destinations_section destinations={@view.destinations} />
+        <.dotfiles_section dotfiles={@view.dotfiles} timezone={@timezone} />
       </div>
     </Layouts.app>
     """
@@ -282,6 +286,54 @@ defmodule FaeWeb.DashboardLive do
     """
   end
 
+  attr :dotfiles, :map, required: true
+  attr :timezone, :string, required: true
+
+  defp dotfiles_section(assigns) do
+    ~H"""
+    <section id="dotfiles-section" class="card bg-base-200 p-6 space-y-3">
+      <div class="flex items-baseline justify-between">
+        <h2 class="text-xl font-semibold">Dotfiles</h2>
+        <.link navigate={~p"/dotfiles"} class="link text-sm">View</.link>
+      </div>
+
+      <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 items-baseline">
+        <dt class="text-sm opacity-75">Tracked paths</dt>
+        <dd id="dotfiles-tracked-count" class="font-mono">{@dotfiles.tracked_count}</dd>
+        <dt class="text-sm opacity-75">Last backup</dt>
+        <dd id="dotfiles-last-backup" class="font-mono">
+          <.local_datetime value={@dotfiles.last_backup_at} tz={@timezone} format={:datetime} />
+        </dd>
+        <dt class="text-sm opacity-75">Push</dt>
+        <dd id="dotfiles-push-status">
+          <.dotfiles_push_badge enabled={@dotfiles.enabled} last_push_ok={@dotfiles.last_push_ok} />
+        </dd>
+      </dl>
+    </section>
+    """
+  end
+
+  attr :enabled, :boolean, required: true
+  attr :last_push_ok, :boolean, required: true
+
+  defp dotfiles_push_badge(%{enabled: false} = assigns) do
+    ~H"""
+    <span class="badge badge-ghost badge-sm">off</span>
+    """
+  end
+
+  defp dotfiles_push_badge(%{last_push_ok: false} = assigns) do
+    ~H"""
+    <span class="badge badge-warning badge-sm">push failed</span>
+    """
+  end
+
+  defp dotfiles_push_badge(assigns) do
+    ~H"""
+    <span class="badge badge-success badge-sm">✓</span>
+    """
+  end
+
   defp refresh(socket, overrides \\ []) do
     now = Clock.now()
     jobs = Jobs.list()
@@ -291,6 +343,12 @@ defmodule FaeWeb.DashboardLive do
     self_update = SelfUpdate.current_status()
     latest_release = release_from_cache()
     system = Keyword.get(overrides, :system) || SystemStatus.get_state()
+
+    dotfiles = %{
+      config: Dotfiles.get_config(),
+      tracked_count: length(Dotfiles.list_tracked()),
+      last_run: Dotfiles.last_run()
+    }
 
     view =
       DashboardView.build(%{
@@ -303,7 +361,8 @@ defmodule FaeWeb.DashboardLive do
         self_update_phase: self_update.phase,
         self_update_error: self_update.error,
         system: system,
-        now: now
+        now: now,
+        dotfiles: dotfiles
       })
 
     assign(socket, :view, view)

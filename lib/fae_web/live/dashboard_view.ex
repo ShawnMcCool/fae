@@ -11,6 +11,7 @@ defmodule FaeWeb.DashboardView do
   """
 
   alias Fae.Backups.{Job, Recurrence, Run}
+  alias Fae.Dotfiles.Config, as: DotfilesConfig
 
   @recent_activity_error_preview_chars 120
 
@@ -52,7 +53,22 @@ defmodule FaeWeb.DashboardView do
           self_update_phase: atom(),
           self_update_error: term() | nil,
           system: %{boot_at: DateTime.t(), uptime_seconds: non_neg_integer()},
-          now: DateTime.t()
+          now: DateTime.t(),
+          dotfiles: dotfiles_input()
+        }
+
+  @type dotfiles_input :: %{
+          config: DotfilesConfig.t(),
+          tracked_count: non_neg_integer(),
+          last_run: map() | nil
+        }
+
+  @type dotfiles :: %{
+          enabled: boolean(),
+          last_backup_at: DateTime.t() | nil,
+          last_push_ok: boolean(),
+          tracked_count: non_neg_integer(),
+          repo_remote: String.t() | nil
         }
 
   @type output :: %{
@@ -74,7 +90,8 @@ defmodule FaeWeb.DashboardView do
             rows: [job_row()]
           },
           activity: [activity_row()],
-          destinations: [Fae.Storage.Destination.t()]
+          destinations: [Fae.Storage.Destination.t()],
+          dotfiles: dotfiles()
         }
 
   @spec build(input()) :: output()
@@ -105,7 +122,31 @@ defmodule FaeWeb.DashboardView do
         rows: job_rows
       },
       activity: activity,
-      destinations: input.destinations
+      destinations: input.destinations,
+      dotfiles: dotfiles(Map.get(input, :dotfiles, default_dotfiles_input()))
+    }
+  end
+
+  defp default_dotfiles_input,
+    do: %{
+      config: %DotfilesConfig{enabled: false, last_push_ok: true},
+      tracked_count: 0,
+      last_run: nil
+    }
+
+  @spec dotfiles(%{
+          config: DotfilesConfig.t(),
+          tracked_count: non_neg_integer(),
+          last_run: term()
+        }) ::
+          dotfiles()
+  def dotfiles(%{config: %DotfilesConfig{} = config, tracked_count: tracked_count}) do
+    %{
+      enabled: config.enabled,
+      last_backup_at: config.last_backup_at,
+      last_push_ok: config.last_push_ok,
+      tracked_count: tracked_count,
+      repo_remote: config.remote_url
     }
   end
 

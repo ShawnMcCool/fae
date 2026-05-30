@@ -7,6 +7,7 @@ defmodule FaeWeb.DashboardLiveTest do
   import Phoenix.LiveViewTest
 
   alias Fae.Backups.{Jobs, Runs}
+  alias Fae.Dotfiles.{Configs, TrackedPaths}
   alias Fae.Storage.Destinations
   alias Fae.Topics
 
@@ -19,6 +20,31 @@ defmodule FaeWeb.DashboardLiveTest do
       assert has_element?(view, "#jobs-section")
       assert has_element?(view, "#activity-section")
       assert has_element?(view, "#destinations-section")
+      assert has_element?(view, "#dotfiles-section")
+    end
+
+    test "shows the dotfiles tracked-path count", %{conn: conn} do
+      {:ok, _} = Configs.update(%{enabled: true})
+      home = System.tmp_dir!()
+      File.mkdir_p!(Path.join(home, ".config/nvim"))
+      {:ok, _} = TrackedPaths.add(%{path: Path.join(home, ".config/nvim"), kind: "directory"})
+
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      assert has_element?(view, "#dotfiles-tracked-count", "1")
+    end
+
+    test "dotfiles section refreshes on a {:dotfiles_changed} broadcast", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+      assert has_element?(view, "#dotfiles-tracked-count", "0")
+
+      home = System.tmp_dir!()
+      File.mkdir_p!(Path.join(home, ".config/fish"))
+      {:ok, _} = TrackedPaths.add(%{path: Path.join(home, ".config/fish"), kind: "directory"})
+
+      Phoenix.PubSub.broadcast(Fae.PubSub, Topics.dotfiles_status(), {:dotfiles_changed})
+
+      assert has_element?(view, "#dotfiles-tracked-count", "1")
     end
 
     test "lists configured destinations", %{conn: conn} do
