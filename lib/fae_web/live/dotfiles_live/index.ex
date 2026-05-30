@@ -11,7 +11,14 @@ defmodule FaeWeb.DotfilesLive.Index do
 
   alias Fae.Dotfiles
   alias Fae.Dotfiles.{Git, Paths, TrackedPath, TrackedPaths}
-  alias FaeWeb.DotfilesLive.{IgnoresComponent, ImportComponent, TrackPathComponent}
+
+  alias FaeWeb.DotfilesLive.{
+    IgnoresComponent,
+    ImportComponent,
+    RemoteSetupComponent,
+    TrackPathComponent
+  }
+
   alias FaeWeb.DotfilesView
 
   @cadence_options [
@@ -52,6 +59,9 @@ defmodule FaeWeb.DotfilesLive.Index do
     do: {:noreply, socket |> assign(:modal, nil) |> load()}
 
   def handle_info({:import_cancel}, socket), do: {:noreply, assign(socket, :modal, nil)}
+
+  def handle_info({:remote_done}, socket),
+    do: {:noreply, socket |> assign(:modal, nil) |> load()}
 
   def handle_info(_, socket), do: {:noreply, socket}
 
@@ -106,6 +116,10 @@ defmodule FaeWeb.DotfilesLive.Index do
     {:noreply, assign(socket, :modal, :import)}
   end
 
+  def handle_event("setup_remote", _params, socket) do
+    {:noreply, assign(socket, :modal, :remote_setup)}
+  end
+
   defp load(socket) do
     config = Dotfiles.get_config()
 
@@ -151,6 +165,18 @@ defmodule FaeWeb.DotfilesLive.Index do
           </button>
         </div>
 
+        <div
+          :if={not @view.health.remote.configured?}
+          class="flex flex-wrap items-center gap-3 rounded-box bg-warning/10 border border-warning/30 px-4 py-3 text-sm"
+        >
+          <.icon name="hero-exclamation-triangle" class="size-5 text-warning flex-none" />
+          <span>Backups are staying local — no remote set</span>
+          <div class="flex-1"></div>
+          <button type="button" phx-click="setup_remote" class="btn btn-sm btn-primary">
+            Set up remote
+          </button>
+        </div>
+
         <div class="flex flex-wrap items-center gap-3 rounded-box bg-base-200 px-4 py-3 text-sm">
           <span class={[
             "inline-block size-2.5 rounded-full",
@@ -187,6 +213,23 @@ defmodule FaeWeb.DotfilesLive.Index do
           </div>
 
           <span class="opacity-60">{last_backup_summary(@view.health)}</span>
+
+          <span :if={@view.health.remote.configured?} class="flex items-center gap-2">
+            <span class={[
+              "inline-block size-2 rounded-full flex-none",
+              remote_status_dot_class(@view.health.remote.status)
+            ]}>
+            </span>
+            <span class="font-mono opacity-70 truncate max-w-xs" title={@view.health.remote.url}>
+              {@view.health.remote.url}
+            </span>
+            <span :if={@view.health.remote.message != ""} class="text-warning">
+              {@view.health.remote.message}
+            </span>
+            <button type="button" phx-click="setup_remote" class="link link-primary text-xs">
+              Edit
+            </button>
+          </span>
 
           <div class="flex-1"></div>
 
@@ -326,6 +369,12 @@ defmodule FaeWeb.DotfilesLive.Index do
       />
 
       <.live_component :if={@modal == :import} module={ImportComponent} id="dotfiles-import" />
+
+      <.live_component
+        :if={@modal == :remote_setup}
+        module={RemoteSetupComponent}
+        id="dotfiles-remote-setup"
+      />
     </Layouts.app>
     """
   end
@@ -342,13 +391,12 @@ defmodule FaeWeb.DotfilesLive.Index do
     groups |> Enum.map(&length(&1.items)) |> Enum.sum() |> to_string()
   end
 
-  @doc "Short summary line for the last backup and push state."
+  @doc """
+  Short summary line for the last backup and push state. Push failures are
+  surfaced via the friendly remote status (`@view.health.remote.message`),
+  so this stays neutral about the cause.
+  """
   def last_backup_summary(%{last_backup_at: nil}), do: "· no backups yet"
-
-  def last_backup_summary(%{last_push_ok: false, last_push_error: error}) when is_binary(error) do
-    "· last push failed: #{error}"
-  end
-
   def last_backup_summary(%{last_push_ok: false}), do: "· last push failed"
   def last_backup_summary(_), do: "· pushed ✓"
 
@@ -394,6 +442,10 @@ defmodule FaeWeb.DotfilesLive.Index do
   defp ignores_target({:ignores, path}) do
     Enum.find(Dotfiles.list_tracked(), &(&1.path == path))
   end
+
+  defp remote_status_dot_class(:ok), do: "bg-success"
+  defp remote_status_dot_class(:failed), do: "bg-error"
+  defp remote_status_dot_class(_), do: "bg-base-content/30"
 
   defp status_dot_class(:pending), do: "bg-info"
   defp status_dot_class(:missing), do: "bg-error"
