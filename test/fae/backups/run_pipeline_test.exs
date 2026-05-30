@@ -192,7 +192,9 @@ defmodule Fae.Backups.RunPipelineTest do
       test_pid = self()
 
       DriverMock
-      |> expect(:put_stream, fn _dest, _key, _path, _opts -> {:ok, %{byte_size: 5, sha256: "x"}} end)
+      |> expect(:put_stream, fn _dest, _key, _path, _opts ->
+        {:ok, %{byte_size: 5, sha256: "x"}}
+      end)
       |> expect(:list, fn _dest, _prefix -> {:ok, old_objects} end)
       |> expect(:delete, fn _dest, key ->
         send(test_pid, {:deleted, key})
