@@ -5,6 +5,8 @@ defmodule Fae.Dotfiles.Config do
 
   @timestamps_opts [type: :utc_datetime]
 
+  @type t :: %__MODULE__{}
+
   schema "dotfiles_config" do
     field :enabled, :boolean, default: true
     field :interval_seconds, :integer, default: 3600

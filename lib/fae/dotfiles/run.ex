@@ -7,6 +7,8 @@ defmodule Fae.Dotfiles.Run do
   @timestamps_opts [type: :utc_datetime, updated_at: false]
   @statuses ~w(running success no_changes error)
 
+  @type t :: %__MODULE__{}
+
   schema "dotfiles_runs" do
     field :status, :string
     field :started_at, :utc_datetime_usec

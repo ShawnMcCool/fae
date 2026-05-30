@@ -50,3 +50,6 @@ npm-debug.log
 
 # brainstorming visual companion
 .superpowers/
+
+# serena MCP server workspace
+.serena/

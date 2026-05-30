@@ -7,6 +7,8 @@ defmodule Fae.Dotfiles.TrackedPath do
   @timestamps_opts [type: :utc_datetime]
   @kinds ~w(directory file)
 
+  @type t :: %__MODULE__{}
+
   schema "dotfiles_tracked_paths" do
     field :path, :string
     field :kind, :string
