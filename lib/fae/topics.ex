@@ -11,4 +11,6 @@ defmodule Fae.Topics do
   def backups_jobs, do: "backups:jobs"
   def archive_runs, do: "archive:runs"
   def archive_progress, do: "archive:progress"
+  def dotfiles_status, do: "dotfiles:status"
+  def dotfiles_runs, do: "dotfiles:runs"
 end
