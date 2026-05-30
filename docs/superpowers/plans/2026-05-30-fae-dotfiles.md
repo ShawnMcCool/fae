@@ -43,6 +43,11 @@ The `Git` module functions take `git_dir`/`work_tree` (defaulting from `Paths`) 
 
 **Paths.** git-dir `Path.join(data_dir, "dotfiles/repo.git")`; work-tree `System.user_home!()`; manifest `<work_tree>/.config/fae/package-list.txt`. `data_dir` mirrors `config/runtime.exs` (`$XDG_DATA_HOME/fae` || `$HOME/.local/share/fae`).
 
+**Oban testing gotcha.** `config/test.exs` sets `config :fae, Oban, testing: :inline` — inserted jobs execute **synchronously on insert and ignore `scheduled_at`**. Consequences for tests:
+- The Scheduler test (Task 9) must assert against the queue, so put `use Oban.Testing, repo: Fae.Repo` **and** override to manual mode for that module with `@moduletag oban_testing: :manual` is not enough — instead wrap the assertions with `Oban.Testing.with_testing_mode(:manual, fn -> Scheduler.do_reconcile(); assert_enqueued(...) end)`. This keeps `scheduled_at` jobs in the queue so `assert_enqueued` finds them.
+- The LiveView `backup_now` test (Task 13): under `:inline`, `Fae.Dotfiles.run_now()` will **execute the pipeline synchronously** against the configured tmp paths. Either set up a temp repo/remote in that test's setup (like the pipeline test) or wrap the click in `Oban.Testing.with_testing_mode(:manual, fn -> ... end)` and assert the job is enqueued rather than executed. Prefer the latter for a pure UI assertion.
+- `BackupPipeline.run/1` is tested **directly** (Task 8), not through Oban, so it's unaffected.
+
 ---
 
 ## Data model
